@@ -3,6 +3,7 @@ from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 from crewai_tools import SerperDevTool
+from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 
 
 @CrewBase
@@ -13,12 +14,29 @@ class DiligenceAgent():
     tasks: List[Task]
 
     @agent
+    def data_organizer(self) -> Agent:
+        return Agent(
+            config=self.agents_config['data_organizer'], # type: ignore[index]
+            verbose=True,
+            llm="gpt-4o-mini",
+            tools=[GoogleDocProcessor()]
+        )
+
+    @agent
     def researcher(self) -> Agent:
         return Agent(
             config=self.agents_config['researcher'], # type: ignore[index]
             verbose=True,
             llm="gpt-4o-mini",
-            tools=[SerperDevTool()]
+            #tools=[SerperDevTool()]
+        )
+
+    @agent
+    def data_organizer(self) -> Agent:
+        return Agent(
+            config=self.agents_config['data_organizer'], # type: ignore[index]
+            verbose=True,
+            llm="gpt-4o-mini"
         )
 
     @agent
@@ -27,6 +45,13 @@ class DiligenceAgent():
             config=self.agents_config['reporting_analyst'], # type: ignore[index]
             verbose=True,
             llm="gpt-4o-mini"
+        )
+
+    @task
+    def data_organizer_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['data_organizer_task'], # type: ignore[index]
+            llm="gpt-4o-mini"  # Set specific model for this task
         )
 
     @task

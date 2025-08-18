@@ -1,10 +1,17 @@
+data_organizer_task:
+  description: >
+    Organize the data about company {company_name} from multiple sources into a structurd JSON format that can be used by an analyst to build a report on this company.
+  expected_output: >
+    A structured JSON format of the data.
+  agent: data_organizer
+
 research_task:
   description: >
-    Conduct a thorough research about {topic}
+    Conduct a thorough research about company {company_name}.
     Make sure you find any interesting and relevant information given
     the current year is {current_year}.
   expected_output: >
-    A list with 10 bullet points of the most relevant information about {topic}
+    A list with 10 bullet points of the most relevant information about company {company_name}
   agent: researcher
 
 reporting_task:

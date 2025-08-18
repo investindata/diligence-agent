@@ -8,6 +8,8 @@ dependencies = [
     "crewai-tools>=0.62.0",
     "crewai[tools]>=0.159.0,<1.0.0",
     "opik>=1.8.27",
+    "requests>=2.32.0",
+    "pytest>=8.0.0",
 ]
 
 [project.scripts]
@@ -23,3 +25,12 @@ build-backend = "hatchling.build"
 
 [tool.crewai]
 type = "crew"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]

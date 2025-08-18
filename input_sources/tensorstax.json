@@ -1,0 +1,25 @@
+{
+  "company_name": "Tensorstax",
+  "input_sources": [
+    {
+      "source": "Google Docs",
+      "identifier": "https://docs.google.com/document/d/example-tensorstax-dd/edit",
+      "description": "Due Diligence Report - Analysis of Tensorstax's AI infrastructure platform and market opportunity"
+    },
+    {
+      "source": "Slack",
+      "identifier": "#tensorstax-research",
+      "description": "Research team discussions about Tensorstax's technical architecture and competitive positioning"
+    },
+    {
+      "source": "Webpage",
+      "identifier": "https://tensorstax.ai",
+      "description": "Official company website with product information and company overview"
+    },
+    {
+      "source": "Webpage",
+      "identifier": "https://github.com/tensorstax",
+      "description": "GitHub repositories showing open source contributions and technical capabilities"
+    }
+  ]
+}
