@@ -7,14 +7,14 @@ data_organizer_task:
     A structured JSON format of the data.
   agent: data_organizer
 
-# research_task:
-#   description: >
-#     Conduct a thorough research about company {company_name}.
-#     Make sure you find any interesting and relevant information given
-#     the current year is {current_year}.
-#   expected_output: >
-#     A list with 10 bullet points of the most relevant information about company {company_name}
-#   agent: researcher
+research_task:
+  description: >
+    Conduct a thorough research about company {company_name}.
+    Make sure you find any interesting and relevant information to fill out the following sections of an investment report: {sections}.
+    The information must be up to date given the current year is {current_year}.
+  expected_output: >
+    A list with 10 bullet points of the most relevant information about company {company_name} for each of the report sections.
+  agent: researcher
 
 # reporting_task:
 #   description: >

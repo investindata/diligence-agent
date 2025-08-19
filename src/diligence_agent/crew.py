@@ -24,13 +24,13 @@ class DiligenceAgent():
             max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
         )
 
-    #@agent
+    @agent
     def researcher(self) -> Agent:
        return Agent(
            config=self.agents_config['researcher'], # type: ignore[index]
            verbose=True,
            llm="gpt-4o-mini",
-           #tools=[SerperDevTool()]
+           tools=[SerperDevTool()]
        )
 
     #@agent
@@ -48,11 +48,12 @@ class DiligenceAgent():
             llm="gpt-4o-mini",  # Set specific model for this task
         )
 
-    #@task
+    @task
     def research_task(self) -> Task:
        return Task(
            config=self.tasks_config['research_task'], # type: ignore[index]
-           llm="gpt-4o-mini"  # Set specific model for this task
+           llm="gpt-4o-mini",  # Set specific model for this task
+           context=[self.data_organizer_task()] 
        )
 
     #@task

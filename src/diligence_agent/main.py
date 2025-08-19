@@ -40,7 +40,8 @@ def run():
             'company_name': company_data.company_name,
             'current_year': str(datetime.now().year),
             'company_sources': [s.model_dump() for s in company_data.company_sources],
-            'reference_sources': [s.model_dump() for s in company_data.reference_sources]
+            'reference_sources': [s.model_dump() for s in company_data.reference_sources],
+            'sections': ['Overview', 'Why Interesting']
         }
         
         print(f"Running diligence analysis for: {company_data.company_name}")
