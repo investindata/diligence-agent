@@ -1,11 +1,13 @@
 {
   "company_name": "Tensorstax",
-  "input_sources": [
+  "company_sources": [
     {
       "source": "Google Docs",
       "identifier": "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing",
       "description": "Company questionnaire filled out by the founders"
-    },
+    }
+  ],
+  "reference_sources": [
     {
       "source": "Google Docs",
       "identifier": "https://docs.google.com/document/d/1a759lcNH0KkZ0QkaQ6-L0lTECUpdHqDFX42WyPPVae8/edit?pli=1&tab=t.0#heading=h.ce5ew7o1swma",
@@ -17,4 +19,5 @@
       "description": "Diligence memo template - please use this format for the final memo output"
     }
   ]
+  
 }

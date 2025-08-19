@@ -1,8 +1,8 @@
 data_organizer_task:
   description: >
-    Organize the data about company {company_name} from multiple sources into a structurd JSON format that can be used by an analyst to build a report on this company.
+    Organize the data about company {company_name} from multiple sources into a structured JSON format that can be used by an analyst to build a report on this company.
     You have access to the following data sources:
-    {input_sources}
+    {company_sources}
   expected_output: >
     A structured JSON format of the data.
   agent: data_organizer

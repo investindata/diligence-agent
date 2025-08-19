@@ -39,9 +39,10 @@ class InputSource(BaseModel):
 class InputSourcesData(BaseModel):
     """Schema for the complete input sources file"""
     company_name: str = Field(..., description="Name of the company being analyzed")
-    input_sources: List[InputSource] = Field(..., description="List of input sources")
+    company_sources: List[InputSource] = Field(..., description="List of input sources about the company")
+    reference_sources: List[InputSource] = Field(..., description="List of reference sources to support the report creation")
     
-    @field_validator('input_sources')
+    @field_validator('company_sources', 'reference_sources')
     @classmethod
     def validate_sources_not_empty(cls, v):
         """Ensure at least one input source is provided"""
@@ -105,7 +106,7 @@ class InputReader:
         
         text_lines = [
             f"Company: {data.company_name}",
-            f"Number of Input Sources: {len(data.input_sources)}",
+            f"Number of Input Sources: {len(data.company_sources)}",
             "",
             "Input Sources:",
             "=" * 50
@@ -136,7 +137,7 @@ class InputReader:
     
     def list_available_companies(self) -> List[str]:
         """
-        List all available company files
+        List all available company input sources files
         
         Returns:
             List of company file names

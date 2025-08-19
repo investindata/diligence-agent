@@ -35,12 +35,12 @@ def run():
         
         # Read the company data
         company_data = reader.read_company_sources(COMPANY_FILE)
-        input_sources_text = reader.to_text(COMPANY_FILE)
         
         inputs = {
             'company_name': company_data.company_name,
             'current_year': str(datetime.now().year),
-            'input_sources': input_sources_text
+            'company_sources': [s.model_dump() for s in company_data.company_sources],
+            'reference_sources': [s.model_dump() for s in company_data.reference_sources]
         }
         
         print(f"Running diligence analysis for: {company_data.company_name}")
