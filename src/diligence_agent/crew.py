@@ -33,7 +33,7 @@ class DiligenceAgent():
            tools=[SerperDevTool()]
        )
 
-    #@agent
+    @agent
     def reporting_analyst(self) -> Agent:
        return Agent(
            config=self.agents_config['reporting_analyst'], # type: ignore[index]
@@ -56,12 +56,13 @@ class DiligenceAgent():
            context=[self.data_organizer_task()] 
        )
 
-    #@task
+    @task
     def reporting_task(self) -> Task:
        return Task(
            config=self.tasks_config['reporting_task'], # type: ignore[index]
            output_file='report.md',
-           llm="gpt-4o-mini"
+           llm="gpt-4o-mini",
+           context=[self.data_organizer_task()] 
        )
 
     @crew
