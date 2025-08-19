@@ -14,12 +14,12 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 track_crewai(project_name="diligence-agent")
 
+COMPANY_FILE = "tensorstax.json"  # Options: "baseten.json", "tensorstax.json"
+
 def run():
     """
     Run the crew.
     """
-    # Change this line to switch companies
-    COMPANY_FILE = "baseten.json"  # Options: "baseten.json", "tensorstax.json"
     
     # Read input sources for the specified company
     try:
@@ -53,8 +53,6 @@ def train():
     """
     Train the crew for a given number of iterations.
     """
-    # Change this line to switch companies
-    COMPANY_FILE = "baseten.json"  # Options: "baseten.json", "tensorstax.json"
     
     try:
         reader = InputReader()
@@ -88,8 +86,6 @@ def test():
     """
     Test the crew execution and returns the results.
     """
-    # Change this line to switch companies
-    COMPANY_FILE = "baseten.json"  # Options: "baseten.json", "tensorstax.json"
     
     try:
         reader = InputReader()

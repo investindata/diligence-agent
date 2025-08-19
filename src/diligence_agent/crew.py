@@ -19,55 +19,49 @@ class DiligenceAgent():
             config=self.agents_config['data_organizer'], # type: ignore[index]
             verbose=True,
             llm="gpt-4o-mini",
-            tools=[GoogleDocProcessor()]
+            tools=[GoogleDocProcessor()],
+            max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
+            max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
         )
 
-    @agent
+    #@agent
     def researcher(self) -> Agent:
-        return Agent(
-            config=self.agents_config['researcher'], # type: ignore[index]
-            verbose=True,
-            llm="gpt-4o-mini",
-            #tools=[SerperDevTool()]
-        )
+       return Agent(
+           config=self.agents_config['researcher'], # type: ignore[index]
+           verbose=True,
+           llm="gpt-4o-mini",
+           #tools=[SerperDevTool()]
+       )
 
-    @agent
-    def data_organizer(self) -> Agent:
-        return Agent(
-            config=self.agents_config['data_organizer'], # type: ignore[index]
-            verbose=True,
-            llm="gpt-4o-mini"
-        )
-
-    @agent
+    #@agent
     def reporting_analyst(self) -> Agent:
-        return Agent(
-            config=self.agents_config['reporting_analyst'], # type: ignore[index]
-            verbose=True,
-            llm="gpt-4o-mini"
-        )
+       return Agent(
+           config=self.agents_config['reporting_analyst'], # type: ignore[index]
+           verbose=True,
+           llm="gpt-4o-mini"
+       )
 
     @task
     def data_organizer_task(self) -> Task:
         return Task(
             config=self.tasks_config['data_organizer_task'], # type: ignore[index]
-            llm="gpt-4o-mini"  # Set specific model for this task
+            llm="gpt-4o-mini",  # Set specific model for this task
         )
 
-    @task
+    #@task
     def research_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['research_task'], # type: ignore[index]
-            llm="gpt-4o-mini"  # Set specific model for this task
-        )
+       return Task(
+           config=self.tasks_config['research_task'], # type: ignore[index]
+           llm="gpt-4o-mini"  # Set specific model for this task
+       )
 
-    @task
+    #@task
     def reporting_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['reporting_task'], # type: ignore[index]
-            output_file='report.md',
-            llm="gpt-4o-mini"
-        )
+       return Task(
+           config=self.tasks_config['reporting_task'], # type: ignore[index]
+           output_file='report.md',
+           llm="gpt-4o-mini"
+       )
 
     @crew
     def crew(self) -> Crew:

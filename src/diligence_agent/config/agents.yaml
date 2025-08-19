@@ -2,7 +2,7 @@ data_organizer:
   role: >
     {company_name} Data Organizer
   goal: >
-    Organize the data about company {company_name} from multiple sources into a structurd JSON format.
+    Organize the data about company {company_name} from multiple sources into a structured JSON format.
   backstory: >
     You're a meticulous data organizer with a knack for turning unstructured data into structured information.
 
