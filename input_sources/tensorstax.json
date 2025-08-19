@@ -3,23 +3,18 @@
   "input_sources": [
     {
       "source": "Google Docs",
-      "identifier": "https://docs.google.com/document/d/example-tensorstax-dd/edit",
-      "description": "Due Diligence Report - Analysis of Tensorstax's AI infrastructure platform and market opportunity"
+      "identifier": "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing",
+      "description": "Company questionnaire filled out by the founders"
     },
     {
-      "source": "Slack",
-      "identifier": "#tensorstax-research",
-      "description": "Research team discussions about Tensorstax's technical architecture and competitive positioning"
+      "source": "Google Docs",
+      "identifier": "https://docs.google.com/document/d/1a759lcNH0KkZ0QkaQ6-L0lTECUpdHqDFX42WyPPVae8/edit?pli=1&tab=t.0#heading=h.ce5ew7o1swma",
+      "description": "Example Due Diligence Report - This can be used as a reference for the format of the report"
     },
     {
-      "source": "Webpage",
-      "identifier": "https://tensorstax.ai",
-      "description": "Official company website with product information and company overview"
-    },
-    {
-      "source": "Webpage",
-      "identifier": "https://github.com/tensorstax",
-      "description": "GitHub repositories showing open source contributions and technical capabilities"
+      "source": "Google Docs",
+      "identifier": "https://docs.google.com/document/d/1hYjyWlBd-Yw2EEtYtQ-c_BzRulbrHQ9vyWBS2eHLhws/edit?usp=sharing",
+      "description": "Diligence memo template - please use this format for the final memo output"
     }
   ]
 }
