@@ -30,7 +30,7 @@ class DiligenceAgent():
            config=self.agents_config['section_writer'], # type: ignore[index]
            verbose=True,
            llm="gpt-4o-mini",
-           tools=[SerperDevTool(), SerperScrapeWebsiteTool()]
+           tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()]
        )
 
     @task

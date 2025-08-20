@@ -3,3 +3,4 @@ __pycache__/
 .DS_Store
 .venv/
 report.md
+src/diligence_agent/config/tasks.yaml

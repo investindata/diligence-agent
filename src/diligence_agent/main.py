@@ -6,6 +6,7 @@ from datetime import datetime
 
 from diligence_agent.crew import DiligenceAgent
 from diligence_agent.input_reader import InputReader
+from diligence_agent.generate_tasks_yaml import generate_tasks_yaml
 
 from opik.integrations.crewai import track_crewai
 
@@ -35,6 +36,9 @@ def run():
         
         # Read the company data
         company_data = reader.read_company_sources(COMPANY_FILE)
+
+        # Generate tasks.yaml with company-specific content
+        generate_tasks_yaml()
         
         inputs = {
             'company_name': company_data.company_name,
