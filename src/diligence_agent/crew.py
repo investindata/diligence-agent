@@ -2,7 +2,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
-from crewai_tools import SerperDevTool
+from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 
 
@@ -25,43 +25,35 @@ class DiligenceAgent():
         )
 
     @agent
-    def researcher(self) -> Agent:
+    def section_writer(self) -> Agent:
        return Agent(
-           config=self.agents_config['researcher'], # type: ignore[index]
+           config=self.agents_config['section_writer'], # type: ignore[index]
            verbose=True,
            llm="gpt-4o-mini",
-           tools=[SerperDevTool()]
-       )
-
-    @agent
-    def reporting_analyst(self) -> Agent:
-       return Agent(
-           config=self.agents_config['reporting_analyst'], # type: ignore[index]
-           verbose=True,
-           llm="gpt-4o-mini"
+           tools=[SerperDevTool(), SerperScrapeWebsiteTool()]
        )
 
     @task
     def data_organizer_task(self) -> Task:
         return Task(
             config=self.tasks_config['data_organizer_task'], # type: ignore[index]
-            llm="gpt-4o-mini",  # Set specific model for this task
+            llm="gpt-4o-mini",  
         )
 
     @task
-    def research_task(self) -> Task:
-       return Task(
-           config=self.tasks_config['research_task'], # type: ignore[index]
-           llm="gpt-4o-mini",  # Set specific model for this task
+    def overview_section_writer_task(self) -> Task:
+        print("TASKS CONFIG:", self.tasks_config)
+        return Task(
+           config=self.tasks_config['overview_section_writer_task'], # type: ignore[index]
+           llm="gpt-4o-mini",  
            context=[self.data_organizer_task()] 
-       )
+        )
 
     @task
-    def reporting_task(self) -> Task:
+    def why_interesting_section_writer_task(self) -> Task:
        return Task(
-           config=self.tasks_config['reporting_task'], # type: ignore[index]
-           output_file='report.md',
-           llm="gpt-4o-mini",
+           config=self.tasks_config['why_interesting_section_writer_task'], # type: ignore[index]
+           llm="gpt-4o-mini",  
            context=[self.data_organizer_task()] 
        )
 

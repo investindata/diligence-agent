@@ -7,22 +7,25 @@ data_organizer_task:
     A structured JSON format of the data.
   agent: data_organizer
 
-research_task:
+overview_section_writer_task:
   description: >
-    Conduct a thorough research about company {company_name}.
-    Make sure you find any interesting and relevant information to fill out the following sections of an investment report: {sections}.
-    The information must be up to date given the current year is {current_year}.
+    Write a detailed section for an investment report about company {company_name}.
+    You have access to data about {company_name} provided by the data organizer task and the ability to search and browse the web for additional information.
+    Below are templates for what a full report looks like for your reference:
+    {reference_sources}
+    You are responsible for writing the Overview section of the report.
   expected_output: >
-    A list with 10 items and associated website link of the most relevant information about company {company_name} for each of the report sections.
-  agent: researcher
+    A detailed Overview section for an investment report about company {company_name}.
+  agent: section_writer
 
-reporting_task:
+why_interesting_section_writer_task:
   description: >
-    Review the context you got and expand each topic into full sections of an investment report.
-    Make sure the report is detailed and contains any and all relevant information.
-    For today, focus only on the following sections: {sections}.
-    For your reference, you have access to the following report from a different company, which we can use to gauge format and style: {reference_sources}.
+    Write a detailed section for an investment report about company {company_name}.
+    You have access to data about {company_name} provided by the data organizer task and the ability to search and browse the web for additional information.
+    Below are templates for what a full report looks like for your reference:
+    {reference_sources}
+    You are responsible for writing the Why Interesting section of the report.
   expected_output: >
-    A fully fledged investment report with the following sections: {sections}.
-    Formatted as markdown without '```'
-  agent: reporting_analyst
+    A detailed Why Interesting section for an investment report about company {company_name}.
+  agent: section_writer
+
