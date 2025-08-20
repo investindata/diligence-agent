@@ -32,6 +32,17 @@ class DiligenceAgent():
            llm="gpt-4o-mini",
            tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()]
        )
+    
+    @agent
+    def report_writer(self) -> Agent:
+        return Agent(
+            config=self.agents_config['report_writer'], # type: ignore[index]
+            verbose=True,
+            llm="gpt-4o-mini",
+            tools=[GoogleDocProcessor()],
+            max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
+            max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
+        )
 
     @task
     def data_organizer_task(self) -> Task:
@@ -56,6 +67,53 @@ class DiligenceAgent():
            llm="gpt-4o-mini",  
            context=[self.data_organizer_task()] 
        )
+    
+    @task
+    def product_section_writer_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['product_section_writer_task'], # type: ignore[index]
+            llm="gpt-4o-mini",  
+            context=[self.data_organizer_task()] 
+        )
+    
+    @task
+    def market_section_writer_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['market_section_writer_task'], # type: ignore[index]
+            llm="gpt-4o-mini",  
+            context=[self.data_organizer_task()] 
+        )
+    
+    @task
+    def competitive_landscape_section_writer_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['competitive_landscape_section_writer_task'], # type: ignore[index]
+            llm="gpt-4o-mini",  
+            context=[self.data_organizer_task()] 
+        )
+    
+    @task
+    def team_section_writer_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['team_section_writer_task'], # type: ignore[index]
+            llm="gpt-4o-mini",  
+            context=[self.data_organizer_task()] 
+        )
+    
+    @task
+    def report_writer_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['report_writer_task'], # type: ignore[index]
+            llm="gpt-4.1",  
+            context=[
+                self.overview_section_writer_task(),
+                self.why_interesting_section_writer_task(),
+                self.product_section_writer_task(),
+                self.market_section_writer_task(),
+                self.competitive_landscape_section_writer_task(),
+                self.team_section_writer_task(),
+            ]
+        )
 
     @crew
     def crew(self) -> Crew:
