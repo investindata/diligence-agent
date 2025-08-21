@@ -43,6 +43,7 @@ def run():
         inputs = {
             'company_name': company_data.company_name,
             'current_year': str(datetime.now().year),
+            'current_date': datetime.now().strftime("%Y-%m-%d"),
             'company_sources': [s.model_dump() for s in company_data.company_sources],
             'reference_sources': [s.model_dump() for s in company_data.reference_sources],
         }
