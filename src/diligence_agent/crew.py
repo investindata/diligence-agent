@@ -40,7 +40,7 @@ class DiligenceAgent():
             verbose=True,
             llm="gpt-4o-mini",
             tools=[GoogleDocProcessor()],
-            max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
+            #max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
             max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
         )
 
