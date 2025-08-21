@@ -11,13 +11,25 @@
     {
       "source": "Google Docs",
       "identifier": "https://docs.google.com/document/d/1a759lcNH0KkZ0QkaQ6-L0lTECUpdHqDFX42WyPPVae8/edit?pli=1&tab=t.0#heading=h.ce5ew7o1swma",
-      "description": "Example Due Diligence Report - This can be used as a reference for the format of the report"
+      "description": "Example Due Diligence Report for Baseten - This can be used as a reference for the format of the report"
     },
     {
       "source": "Google Docs",
       "identifier": "https://docs.google.com/document/d/1hYjyWlBd-Yw2EEtYtQ-c_BzRulbrHQ9vyWBS2eHLhws/edit?usp=sharing",
       "description": "Diligence memo template - please use this format for the final memo output"
+    },
+    {
+      "source": "Google Docs",
+      "identifier": "https://docs.google.com/document/d/1AHEOCodoCsO94imDJI5BsNcXszZ-ebtWnjEu4zPxEPQ/edit?usp=sharing",
+      "description": "Example of Due Diligence Report for LanceDB- This can be used as a reference for the format of the report"
+    },
+    {
+      "source": "Google Docs",
+      "identifier": "https://docs.google.com/document/d/1Ywpwg7M4Ka2jVAF6ZTQuUKl8V5ZbNigzz7mBmmP-23Y/edit?usp=sharing",
+      "description": "Example of Due Diligence Report for Stream Store - This can be used as a reference for the format of the report"
     }
+
+    
   ]
   
 }
