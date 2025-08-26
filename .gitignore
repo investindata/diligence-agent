@@ -4,3 +4,15 @@ __pycache__/
 .venv/
 report.md
 src/diligence_agent/config/tasks.yaml
+
+# Output files
+output/
+output_*/
+*.md
+!README.md
+!README_BUSINESS.md
+*_executive_summary.md
+ALL_COMPANIES_SUMMARY.md
+
+# Test outputs
+multi_company_output_*/

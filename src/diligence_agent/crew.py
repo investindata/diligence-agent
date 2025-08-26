@@ -19,7 +19,7 @@ class DiligenceAgent():
             config=self.agents_config['data_organizer'], # type: ignore[index]
             verbose=True,
             llm="gpt-4o-mini",
-            tools=[GoogleDocProcessor()],
+            tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()],
             max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
             max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
         )
@@ -42,6 +42,16 @@ class DiligenceAgent():
             tools=[GoogleDocProcessor()],
             #max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
             max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
+        )
+    
+    @agent
+    def investment_decision_maker(self) -> Agent:
+        return Agent(
+            config=self.agents_config['investment_decision_maker'], # type: ignore[index]
+            verbose=True,
+            llm="gpt-4.1",  # Using the most advanced model for investment decisions
+            tools=[],  # No tools needed - just analysis and decision
+            max_retry_limit=1
         )
 
     @task
@@ -104,7 +114,7 @@ class DiligenceAgent():
     def report_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['report_writer_task'], # type: ignore[index]
-            llm="gpt-4.1",  
+            llm="gpt-4.1",  # Keep the advanced model
             context=[
                 self.overview_section_writer_task(),
                 self.why_interesting_section_writer_task(),
@@ -113,6 +123,24 @@ class DiligenceAgent():
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
             ]
+        )
+    
+    @task
+    def executive_summary_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['executive_summary_task'], # type: ignore[index]
+            llm="gpt-4.1",  # Using the most advanced model for critical investment decisions
+            context=[
+                self.data_organizer_task(),
+                self.overview_section_writer_task(),
+                self.why_interesting_section_writer_task(),
+                self.product_section_writer_task(),
+                self.market_section_writer_task(),
+                self.competitive_landscape_section_writer_task(),
+                self.team_section_writer_task(),
+                self.report_writer_task(),
+            ],
+            output_file="executive_summary_and_recommendation.md"  # Save to file
         )
 
     @crew
