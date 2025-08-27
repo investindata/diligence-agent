@@ -1,15 +1,18 @@
 import gradio as gr
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 import os
 import base64
+import threading
+import subprocess
+import sys
 from datetime import datetime
 
 from diligence_agent.input_reader import InputReader
 
 
-class ReportViewer:
-    """Gradio UI for viewing completed investment reports"""
+class DueDiligenceUI:
+    """Gradio UI for running analysis and viewing investment reports"""
     
     def __init__(self):
         self.input_reader = InputReader()
@@ -22,6 +25,49 @@ class ReportViewer:
         except Exception as e:
             print(f"Error getting companies: {e}")
             return []
+    
+    def run_analysis(self, company_name: str, progress_callback=None) -> str:
+        """Run the diligence analysis for a company"""
+        if not company_name:
+            return "No company selected"
+        
+        try:
+            if progress_callback:
+                progress_callback("Starting analysis...")
+            
+            # Run the analysis using subprocess
+            cmd = [sys.executable, "-m", "diligence_agent", company_name]
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            output_lines = []
+            for line in process.stdout:
+                output_lines.append(line.strip())
+                if progress_callback:
+                    progress_callback(f"Running... (latest: {line.strip()[:100]}...)")
+            
+            process.wait()
+            
+            if process.returncode == 0:
+                if progress_callback:
+                    progress_callback("Analysis completed successfully!")
+                return "\n".join(output_lines)
+            else:
+                if progress_callback:
+                    progress_callback(f"Analysis failed with return code {process.returncode}")
+                return f"Analysis failed with return code {process.returncode}\n" + "\n".join(output_lines)
+                
+        except Exception as e:
+            error_msg = f"Error running analysis: {str(e)}"
+            if progress_callback:
+                progress_callback(error_msg)
+            return error_msg
     
     def get_companies_with_reports(self) -> List[str]:
         """Get only companies that have any reports"""
@@ -214,19 +260,37 @@ class ReportViewer:
                 with gr.Column(scale=1):
                     gr.Markdown("### Selection")
                     
-                    companies_with_reports = self.get_companies_with_reports()
+                    # Show all companies for selection
+                    all_companies = self.get_available_companies()
                     company_dropdown = gr.Dropdown(
                         label="Select Company",
-                        choices=companies_with_reports,
+                        choices=all_companies,
                         value=None,  # Start with no selection
                         interactive=True
                     )
                     
+                    # Add Run Report button
+                    run_report_btn = gr.Button(
+                        "Run Report",
+                        interactive=False,  # Disabled by default
+                        variant="primary"
+                    )
+                    
+                    # Progress display
+                    progress_display = gr.Textbox(
+                        label="Progress",
+                        value="",
+                        interactive=False,
+                        visible=False
+                    )
+                    
+                    # Report type dropdown - only shown after reports are created
                     report_type_dropdown = gr.Dropdown(
                         label="Select Report",
                         choices=[],
                         value=None,  # Start with no selection
-                        interactive=True
+                        interactive=True,
+                        visible=False  # Hidden by default
                     )
                 
                 with gr.Column(scale=3):
@@ -240,23 +304,85 @@ class ReportViewer:
                     )
             
             # Event handlers
-            def update_report_types(company_name):
-                """Update report type dropdown when company changes"""
+            def update_report_types_and_button(company_name):
+                """Update button state when company changes - keep dropdown hidden"""
                 if not company_name:
-                    return gr.update(choices=[], value=None)
+                    return (
+                        gr.update(choices=[], value=None, visible=False),  # report_type_dropdown
+                        gr.update(interactive=False)                       # run_report_btn
+                    )
                 
-                report_types = self.get_report_types_for_company(company_name)
-                return gr.update(choices=report_types, value=None)
+                # Keep dropdown hidden until user runs analysis
+                return (
+                    gr.update(choices=[], value=None, visible=False),  # report_type_dropdown - always hidden initially
+                    gr.update(interactive=True)                        # run_report_btn - enable if company selected
+                )
             
             def update_report_content(company_name, report_type):
                 """Update report content when company or report type changes"""
                 return self.load_report_content(company_name, report_type)
             
-            # Company selection updates report types
+            def run_analysis_handler(company_name):
+                """Handle the run analysis button click"""
+                if not company_name:
+                    return (
+                        gr.update(),  # run_report_btn
+                        gr.update(value="Please select a company first", visible=True),  # progress_display
+                        gr.update(choices=[], value=None),  # report_type_dropdown
+                        gr.update()   # report_display
+                    )
+                
+                def progress_callback(message):
+                    return gr.update(value=message, visible=True)
+                
+                # Update UI to show progress
+                yield (
+                    gr.update(interactive=False, value="Running..."),  # run_report_btn
+                    gr.update(value="Starting analysis...", visible=True),  # progress_display
+                    gr.update(visible=False),  # report_type_dropdown - hide during analysis
+                    gr.update()   # report_display
+                )
+                
+                # Run the analysis in a separate thread
+                def run_in_background():
+                    return self.run_analysis(company_name, progress_callback)
+                
+                import concurrent.futures
+                import time
+                start_time = time.time()
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_in_background)
+                    
+                    # Poll for completion
+                    while not future.done():
+                        time.sleep(1)
+                        elapsed = int(time.time() - start_time)
+                        mins, secs = divmod(elapsed, 60)
+                        yield (
+                            gr.update(),  # run_report_btn
+                            gr.update(value=f"Analysis in progress... {mins:02d}:{secs:02d}"),  # progress_display
+                            gr.update(visible=False),  # report_type_dropdown - keep hidden during analysis
+                            gr.update()   # report_display
+                        )
+                    
+                    result = future.result()
+                
+                # Re-enable button and update report types
+                updated_report_types = self.get_report_types_for_company(company_name)
+                
+                yield (
+                    gr.update(interactive=True, value="Run Report"),  # run_report_btn
+                    gr.update(value="Analysis completed! Reports are now available.", visible=True),  # progress_display
+                    gr.update(choices=updated_report_types, value=None, visible=True),  # report_type_dropdown - show after completion
+                    gr.update()   # report_display
+                )
+            
+            # Company selection updates report types and button state
             company_dropdown.change(
-                fn=update_report_types,
+                fn=update_report_types_and_button,
                 inputs=[company_dropdown],
-                outputs=[report_type_dropdown]
+                outputs=[report_type_dropdown, run_report_btn]
             )
             
             # Both company and report type selection update content
@@ -266,6 +392,13 @@ class ReportViewer:
                     inputs=[company_dropdown, report_type_dropdown],
                     outputs=[report_display]
                 )
+            
+            # Run report button handler
+            run_report_btn.click(
+                fn=run_analysis_handler,
+                inputs=[company_dropdown],
+                outputs=[run_report_btn, progress_display, report_type_dropdown, report_display]
+            )
             
             # Load initial state (blank)
             demo.load(
@@ -277,10 +410,10 @@ class ReportViewer:
         return demo
 
 
-def launch_report_viewer():
-    """Launch the report viewer UI"""
-    viewer = ReportViewer()
-    demo = viewer.create_interface()
+def launch_ui():
+    """Launch the due diligence UI"""
+    ui = DueDiligenceUI()
+    demo = ui.create_interface()
     demo.launch(
         server_name="0.0.0.0",
         server_port=7861,  # Different port to avoid conflicts
@@ -291,4 +424,4 @@ def launch_report_viewer():
 
 
 if __name__ == "__main__":
-    launch_report_viewer()
+    launch_ui()

@@ -123,7 +123,7 @@ class DiligenceAgent():
     def report_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['report_writer_task'], # type: ignore[index]
-            llm=llm,
+            llm="gpt-4.1",
             context=[
                 self.overview_section_writer_task(),
                 self.why_interesting_section_writer_task(),
@@ -139,7 +139,7 @@ class DiligenceAgent():
     def executive_summary_task(self) -> Task:
         return Task(
             config=self.tasks_config['executive_summary_task'], # type: ignore[index]
-            llm=llm,
+            llm="gpt-4.1",
             context=[
                 self.data_organizer_task(),
                 self.overview_section_writer_task(),

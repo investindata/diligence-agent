@@ -15,7 +15,7 @@ dependencies = [
 
 [project.scripts]
 diligence_agent = "diligence_agent.main:run"
-report_viewer = "diligence_agent.report_viewer:launch_report_viewer"
+ui = "diligence_agent.ui:launch_ui"
 run_crew = "diligence_agent.main:run"
 train = "diligence_agent.main:train"
 replay = "diligence_agent.main:replay"
