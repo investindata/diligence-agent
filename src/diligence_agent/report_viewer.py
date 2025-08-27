@@ -23,15 +23,78 @@ class ReportViewer:
             return []
     
     def get_companies_with_reports(self) -> List[str]:
-        """Get only companies that have executive summary reports"""
+        """Get only companies that have any reports"""
         all_companies = self.get_available_companies()
         companies_with_reports = []
         
         for company in all_companies:
-            if self.find_latest_report(company):
+            if self.get_available_reports(company):
                 companies_with_reports.append(company)
         
         return companies_with_reports
+    
+    def get_available_reports(self, company_name: str) -> List[Dict[str, str]]:
+        """Get all available reports for a company"""
+        if not company_name:
+            return []
+            
+        output_dir = Path("output")
+        if not output_dir.exists():
+            return []
+        
+        # Scan all session directories
+        session_dirs = list(output_dir.glob("session_*"))
+        if not session_dirs:
+            return []
+        
+        reports = []
+        report_patterns = {
+            "Executive Summary": f"{company_name}_executive_summary.md",
+            "Full Report": f"{company_name}_full_due_diligence_report.md"
+        }
+        
+        # Look for known report types
+        for report_type, filename in report_patterns.items():
+            latest_file = self.find_latest_report_by_filename(filename, session_dirs)
+            if latest_file:
+                reports.append({
+                    "type": report_type,
+                    "path": str(latest_file),
+                    "filename": filename
+                })
+        
+        # Look for other potential reports (future extensibility)
+        for session_dir in session_dirs:
+            for file_path in session_dir.glob(f"{company_name}_*.md"):
+                filename = file_path.name
+                # Skip already processed files
+                if filename not in [r["filename"] for r in reports]:
+                    # Create a readable name from filename
+                    report_type = filename.replace(f"{company_name}_", "").replace(".md", "").replace("_", " ").title()
+                    latest_file = self.find_latest_report_by_filename(filename, session_dirs)
+                    if latest_file:
+                        reports.append({
+                            "type": report_type,
+                            "path": str(latest_file),
+                            "filename": filename
+                        })
+        
+        return reports
+    
+    def find_latest_report_by_filename(self, filename: str, session_dirs: List[Path]) -> Optional[Path]:
+        """Find the latest version of a specific report file across sessions"""
+        matching_files = []
+        
+        for session_dir in session_dirs:
+            file_path = session_dir / filename
+            if file_path.exists():
+                matching_files.append(file_path)
+        
+        if not matching_files:
+            return None
+        
+        # Return the most recently modified file
+        return max(matching_files, key=lambda p: p.stat().st_mtime)
     
     def find_latest_report(self, company_name: str) -> Optional[Path]:
         """Find the latest executive summary report for a company"""
@@ -69,17 +132,24 @@ class ReportViewer:
         latest_report = max(report_files, key=lambda p: p.stat().st_mtime)
         return latest_report
     
-    def load_report_content(self, company_name: str) -> str:
-        """Load and return report content for the selected company"""
-        if not company_name:
-            return "Please select a company to view its report."
+    def load_report_content(self, company_name: str, report_type: str) -> str:
+        """Load and return report content for the selected company and report type"""
+        if not company_name or not report_type:
+            return ""
         
-        report_path = self.find_latest_report(company_name)
+        available_reports = self.get_available_reports(company_name)
+        selected_report = None
         
-        if not report_path:
-            return f"No executive summary report found for **{company_name}**.\n\nPlease run an analysis for this company first."
+        for report in available_reports:
+            if report["type"] == report_type:
+                selected_report = report
+                break
+        
+        if not selected_report:
+            return f"No **{report_type}** found for **{company_name}**."
         
         try:
+            report_path = Path(selected_report["path"])
             with open(report_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
@@ -89,6 +159,7 @@ class ReportViewer:
             
             metadata_header = f"""---
 **Company:** {company_name}  
+**Report Type:** {report_type}  
 **Report File:** `{report_path.name}`  
 **Session:** {session_name}  
 **Last Updated:** {mod_time.strftime('%Y-%m-%d %H:%M:%S')}  
@@ -99,35 +170,28 @@ class ReportViewer:
             return metadata_header + content
             
         except Exception as e:
-            return f"Error loading report for **{company_name}**: {str(e)}"
+            return f"Error loading **{report_type}** for **{company_name}**: {str(e)}"
     
-    def get_report_info(self, company_name: str) -> str:
-        """Get basic info about the report status"""
+    def get_report_types_for_company(self, company_name: str) -> List[str]:
+        """Get available report types for a company"""
         if not company_name:
-            return "No company selected"
+            return []
         
-        report_path = self.find_latest_report(company_name)
-        
-        if not report_path:
-            return f"❌ No report available for {company_name}"
-        
-        mod_time = datetime.fromtimestamp(report_path.stat().st_mtime)
-        session_name = report_path.parent.name
-        
-        return f"✅ Latest report: {session_name} ({mod_time.strftime('%Y-%m-%d %H:%M')})"
+        available_reports = self.get_available_reports(company_name)
+        return [report["type"] for report in available_reports]
     
     def create_interface(self):
         """Create the Gradio interface for report viewing"""
         
         with gr.Blocks(
-            title="Due Diligence Report Viewer", 
+            title="Due Diligence Reports", 
             theme='JohnSmith9982/small_and_pretty'
         ) as demo:
-            gr.Markdown("# 📊 Due Diligence Report Viewer")
+            gr.Markdown("# 📊 Due Diligence Reports")
             
             with gr.Row():
                 with gr.Column(scale=1):
-                    gr.Markdown("### Company Selection")
+                    gr.Markdown("### Selection")
                     
                     companies_with_reports = self.get_companies_with_reports()
                     company_dropdown = gr.Dropdown(
@@ -137,15 +201,15 @@ class ReportViewer:
                         interactive=True
                     )
                     
-                    report_status = gr.Textbox(
-                        label="Report Status",
-                        value="No company selected",
-                        interactive=False,
-                        lines=2
+                    report_type_dropdown = gr.Dropdown(
+                        label="Select Report",
+                        choices=[],
+                        value=None,  # Start with no selection
+                        interactive=True
                     )
                 
                 with gr.Column(scale=3):
-                    gr.Markdown("### Executive Summary Report")
+                    gr.Markdown("### Report")
                     
                     report_display = gr.Markdown(
                         value="",  # Start blank
@@ -154,24 +218,39 @@ class ReportViewer:
                         container=True
                     )
             
-            # Event handler for company selection
+            # Event handlers
+            def update_report_types(company_name):
+                """Update report type dropdown when company changes"""
+                if not company_name:
+                    return gr.update(choices=[], value=None)
+                
+                report_types = self.get_report_types_for_company(company_name)
+                return gr.update(choices=report_types, value=None)
+            
+            def update_report_content(company_name, report_type):
+                """Update report content when company or report type changes"""
+                return self.load_report_content(company_name, report_type)
+            
+            # Company selection updates report types
             company_dropdown.change(
-                fn=lambda company: (
-                    self.get_report_info(company),
-                    self.load_report_content(company)
-                ),
+                fn=update_report_types,
                 inputs=[company_dropdown],
-                outputs=[report_status, report_display]
+                outputs=[report_type_dropdown]
             )
+            
+            # Both company and report type selection update content
+            for component in [company_dropdown, report_type_dropdown]:
+                component.change(
+                    fn=update_report_content,
+                    inputs=[company_dropdown, report_type_dropdown],
+                    outputs=[report_display]
+                )
             
             # Load initial state (blank)
             demo.load(
-                fn=lambda: (
-                    "No company selected",
-                    ""
-                ),
+                fn=lambda: "",
                 inputs=[],
-                outputs=[report_status, report_display]
+                outputs=[report_display]
             )
         
         return demo
