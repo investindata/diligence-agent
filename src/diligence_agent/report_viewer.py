@@ -22,6 +22,17 @@ class ReportViewer:
             print(f"Error getting companies: {e}")
             return []
     
+    def get_companies_with_reports(self) -> List[str]:
+        """Get only companies that have executive summary reports"""
+        all_companies = self.get_available_companies()
+        companies_with_reports = []
+        
+        for company in all_companies:
+            if self.find_latest_report(company):
+                companies_with_reports.append(company)
+        
+        return companies_with_reports
+    
     def find_latest_report(self, company_name: str) -> Optional[Path]:
         """Find the latest executive summary report for a company"""
         if not company_name:
@@ -116,11 +127,11 @@ class ReportViewer:
                 with gr.Column(scale=1):
                     gr.Markdown("### Company Selection")
                     
-                    available_companies = self.get_available_companies()
+                    companies_with_reports = self.get_companies_with_reports()
                     company_dropdown = gr.Dropdown(
                         label="Select Company",
-                        choices=available_companies,
-                        value=available_companies[0] if available_companies else None,
+                        choices=companies_with_reports,
+                        value=None,  # Start with no selection
                         interactive=True
                     )
                     
@@ -135,7 +146,7 @@ class ReportViewer:
                     gr.Markdown("### Executive Summary Report")
                     
                     report_display = gr.Markdown(
-                        value="Please select a company to view its report.",
+                        value="",  # Start blank
                         height=600,
                         show_copy_button=True,
                         container=True
@@ -151,11 +162,11 @@ class ReportViewer:
                 outputs=[report_status, report_display]
             )
             
-            # Load initial state
+            # Load initial state (blank)
             demo.load(
                 fn=lambda: (
-                    self.get_report_info(available_companies[0] if available_companies else ""),
-                    self.load_report_content(available_companies[0] if available_companies else "")
+                    "No company selected",
+                    ""
                 ),
                 inputs=[],
                 outputs=[report_status, report_display]
