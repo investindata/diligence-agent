@@ -10,10 +10,12 @@ dependencies = [
     "opik>=1.8.27",
     "requests>=2.32.0",
     "pytest>=8.0.0",
+    "gradio>=4.0.0",
 ]
 
 [project.scripts]
 diligence_agent = "diligence_agent.main:run"
+report_viewer = "diligence_agent.report_viewer:launch_report_viewer"
 run_crew = "diligence_agent.main:run"
 train = "diligence_agent.main:train"
 replay = "diligence_agent.main:replay"
