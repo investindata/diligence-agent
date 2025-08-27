@@ -2,6 +2,7 @@ import gradio as gr
 from pathlib import Path
 from typing import Dict, Optional, List
 import os
+import base64
 from datetime import datetime
 
 from diligence_agent.input_reader import InputReader
@@ -184,10 +185,30 @@ class ReportViewer:
         """Create the Gradio interface for report viewing"""
         
         with gr.Blocks(
-            title="Due Diligence Reports", 
+            title="InvestInData Due Diligence Reports", 
             theme='JohnSmith9982/small_and_pretty'
         ) as demo:
-            gr.Markdown("# 📊 Due Diligence Reports")
+            # Get logo and embed inline with base64
+            logo_path = Path(__file__).parent / "assets" / "iid_logo.webp"
+            
+            if logo_path.exists():
+                try:
+                    # Read and encode logo as base64
+                    with open(logo_path, "rb") as img_file:
+                        img_data = base64.b64encode(img_file.read()).decode()
+                    
+                    title_html = f'''
+                    <h1 style="display: flex; align-items: center; margin: 0;">
+                        <img src="data:image/webp;base64,{img_data}" 
+                             style="height: 60px !important; width: auto !important; margin-right: 12px; max-height: 60px;">
+                        InvestInData - Due Diligence Reports
+                    </h1>
+                    '''
+                    gr.HTML(title_html)
+                except Exception as e:
+                    gr.Markdown("# 📊 InvestInData - Due Diligence Reports")
+            else:
+                gr.Markdown("# 📊 InvestInData - Due Diligence Reports")
             
             with gr.Row():
                 with gr.Column(scale=1):
