@@ -122,7 +122,8 @@ class DiligenceAgent():
                 self.market_section_writer_task(),
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
-            ]
+            ],
+            output_file="full_due_diligence_report.md"  # Save to file
         )
     
     @task

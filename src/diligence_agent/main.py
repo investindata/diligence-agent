@@ -148,13 +148,22 @@ def run_company_analysis(company_file: str, output_dir: str = "output"):
         
         result = DiligenceAgent().crew().kickoff(inputs=inputs)
         
-        # Move output file to output directory with company name
+        # Move output files to output directory with company name
+        company_name = company_file.replace('.json', '')
+        
+        # Move executive summary
         exec_summary = Path("executive_summary_and_recommendation.md")
         if exec_summary.exists():
-            company_name = company_file.replace('.json', '')
             new_path = output_path / f"{company_name}_executive_summary.md"
             exec_summary.rename(new_path)
             print(f"\n✅ Executive summary saved to: {new_path}")
+        
+        # Move full due diligence report
+        full_report = Path("full_due_diligence_report.md")
+        if full_report.exists():
+            new_full_report_path = output_path / f"{company_name}_full_due_diligence_report.md"
+            full_report.rename(new_full_report_path)
+            print(f"\n📄 Full report saved to: {new_full_report_path}")
         
         return True
         
