@@ -119,9 +119,11 @@ class ReportViewer:
     def create_interface(self):
         """Create the Gradio interface for report viewing"""
         
-        with gr.Blocks(title="Investment Report Viewer", theme=gr.themes.Soft()) as demo:
-            gr.Markdown("# 📊 Investment Report Viewer")
-            gr.Markdown("View completed investment due diligence reports")
+        with gr.Blocks(
+            title="Due Diligence Report Viewer", 
+            theme='JohnSmith9982/small_and_pretty'
+        ) as demo:
+            gr.Markdown("# 📊 Due Diligence Report Viewer")
             
             with gr.Row():
                 with gr.Column(scale=1):
