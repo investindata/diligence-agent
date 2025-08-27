@@ -23,8 +23,11 @@ class TestGoogleDocProcessor:
     def test_extract_document_id(self):
         """Test document ID extraction from various URL formats"""
         # Test the main URL format
-        doc_id = self.processor._extract_document_id(self.test_url)
-        assert doc_id == "1a759lcNH0KkZ0QkaQ6-L0lTECUpdHqDFX42WyPPVae8"
+        from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
+        doc_info = GoogleDocProcessor._extract_document_id_and_type(self.test_url)
+        assert doc_info is not None
+        assert doc_info[0] == "1a759lcNH0KkZ0QkaQ6-L0lTECUpdHqDFX42WyPPVae8"
+        assert doc_info[1] == "document"
         
         # Test other URL formats
         test_cases = [
@@ -34,21 +37,29 @@ class TestGoogleDocProcessor:
         ]
         
         for url in test_cases:
-            doc_id = self.processor._extract_document_id(url)
-            assert doc_id == "1a759lcNH0KkZ0QkaQ6-L0lTECUpdHqDFX42WyPPVae8"
+            doc_info = GoogleDocProcessor._extract_document_id_and_type(url)
+            assert doc_info is not None
+            assert doc_info[0] == "1a759lcNH0KkZ0QkaQ6-L0lTECUpdHqDFX42WyPPVae8"
     
     def test_extract_document_id_invalid_url(self):
         """Test document ID extraction with invalid URLs"""
+        from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
         invalid_urls = [
-            "https://docs.google.com/spreadsheets/d/123/edit",  # Wrong doc type
+            "https://docs.google.com/spreadsheets/d/123/edit",  # Spreadsheet, not doc
             "https://example.com/document/123",  # Not Google Docs
             "invalid-url",
             "",
         ]
         
-        for url in invalid_urls:
-            doc_id = self.processor._extract_document_id(url)
-            assert doc_id is None
+        # Spreadsheet URL should return spreadsheet type
+        doc_info = GoogleDocProcessor._extract_document_id_and_type(invalid_urls[0])
+        assert doc_info is not None
+        assert doc_info[1] == "spreadsheets"
+        
+        # Non-Google URLs should return (None, None)
+        for url in invalid_urls[1:]:
+            doc_info = GoogleDocProcessor._extract_document_id_and_type(url)
+            assert doc_info == (None, None)
     
     @pytest.mark.integration
     def test_fetch_google_doc_content(self):
