@@ -53,6 +53,17 @@ class DiligenceAgent():
             tools=[],  # No tools needed - just analysis and decision
             max_retry_limit=1
         )
+    
+    @agent
+    def founder_assessor(self) -> Agent:
+        return Agent(
+            config=self.agents_config['founder_assessor'], # type: ignore[index]
+            verbose=True,
+            llm="gpt-4o-mini",
+            tools=[SerperDevTool(), SerperScrapeWebsiteTool()],  # Web search for founder research
+            max_iter=7,  # More iterations for comprehensive founder research
+            max_retry_limit=2  # More retries for founder investigation
+        )
 
     @task
     def data_organizer_task(self) -> Task:
@@ -111,6 +122,14 @@ class DiligenceAgent():
         )
     
     @task
+    def founder_assessment_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['founder_assessment_task'], # type: ignore[index]
+            llm="gpt-4o-mini",
+            context=[self.data_organizer_task()]  # Use validated data as context
+        )
+    
+    @task
     def report_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['report_writer_task'], # type: ignore[index]
@@ -122,6 +141,7 @@ class DiligenceAgent():
                 self.market_section_writer_task(),
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
+                self.founder_assessment_task(),  # Add founder assessment
             ]
         )
     
@@ -138,6 +158,7 @@ class DiligenceAgent():
                 self.market_section_writer_task(),
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
+                self.founder_assessment_task(),  # Add founder assessment
                 self.report_writer_task(),
             ],
             output_file="executive_summary_and_recommendation.md"  # Save to file
