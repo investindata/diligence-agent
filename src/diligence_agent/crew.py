@@ -18,7 +18,7 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['data_organizer'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()],
             max_iter=3,
             max_retry_limit=1
@@ -29,7 +29,7 @@ class DiligenceAgent():
        return Agent(
            config=self.agents_config['section_writer'], # type: ignore[index]
            verbose=True,
-           llm="gpt-4.1",
+           llm="gpt-4o-mini",
            tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()]
        )
     
@@ -38,7 +38,7 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['report_writer'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             tools=[GoogleDocProcessor()],
             max_retry_limit=1
         )
@@ -48,7 +48,7 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['investment_decision_maker'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             tools=[],
             max_retry_limit=1
         )
@@ -58,7 +58,7 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['founder_assessor'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             tools=[SerperDevTool(), SerperScrapeWebsiteTool()],
             max_iter=3,
             max_retry_limit=1
@@ -68,7 +68,7 @@ class DiligenceAgent():
     def data_organizer_task(self) -> Task:
         return Task(
             config=self.tasks_config['data_organizer_task'], # type: ignore[index]
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             output_file="task_outputs/1_data_validation.json"
         )
 
@@ -76,9 +76,8 @@ class DiligenceAgent():
     def overview_section_writer_task(self) -> Task:
         return Task(
            config=self.tasks_config['overview_section_writer_task'], # type: ignore[index]
-           llm="gpt-4.1",  
+           llm="gpt-4o-mini",  
            context=[self.data_organizer_task()],
-           async_execution=True,
            output_file="task_outputs/2_overview.md"
         )
 
@@ -86,9 +85,8 @@ class DiligenceAgent():
     def why_interesting_section_writer_task(self) -> Task:
        return Task(
            config=self.tasks_config['why_interesting_section_writer_task'], # type: ignore[index]
-           llm="gpt-4.1",  
+           llm="gpt-4o-mini",  
            context=[self.data_organizer_task()],
-           async_execution=True,
            output_file="task_outputs/3_why_interesting.md"
        )
     
@@ -96,57 +94,52 @@ class DiligenceAgent():
     def product_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['product_section_writer_task'], # type: ignore[index]
-            llm="gpt-4.1",  
+            llm="gpt-4o-mini",  
             context=[self.data_organizer_task()],
-            async_execution=True,
-            output_file="task_outputs/4_product.md"
+             output_file="task_outputs/4_product.md"
         )
     
     @task
     def market_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['market_section_writer_task'], # type: ignore[index]
-            llm="gpt-4.1",  
+            llm="gpt-4o-mini",  
             context=[self.data_organizer_task()],
-            async_execution=True,
-            output_file="task_outputs/5_market.md"
+             output_file="task_outputs/5_market.md"
         )
     
     @task
     def competitive_landscape_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['competitive_landscape_section_writer_task'], # type: ignore[index]
-            llm="gpt-4.1",  
+            llm="gpt-4o-mini",  
             context=[self.data_organizer_task()],
-            async_execution=True,
-            output_file="task_outputs/6_competitive.md"
+             output_file="task_outputs/6_competitive.md"
         )
     
     @task
     def team_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['team_section_writer_task'], # type: ignore[index]
-            llm="gpt-4.1",  
+            llm="gpt-4o-mini",  
             context=[self.data_organizer_task()],
-            async_execution=True,
-            output_file="task_outputs/7_team.md"
+             output_file="task_outputs/7_team.md"
         )
     
     @task
     def founder_assessment_task(self) -> Task:
         return Task(
             config=self.tasks_config['founder_assessment_task'], # type: ignore[index]
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             context=[self.data_organizer_task()],
-            async_execution=True,
-            output_file="task_outputs/8_founder_assessment.md"
+             output_file="task_outputs/8_founder_assessment.md"
         )
     
     @task
     def report_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['report_writer_task'], # type: ignore[index]
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             context=[
                 self.overview_section_writer_task(),
                 self.why_interesting_section_writer_task(),
@@ -163,7 +156,7 @@ class DiligenceAgent():
     def executive_summary_task(self) -> Task:
         return Task(
             config=self.tasks_config['executive_summary_task'], # type: ignore[index]
-            llm="gpt-4.1",
+            llm="gpt-4o-mini",
             context=[
                 self.data_organizer_task(),
                 self.overview_section_writer_task(),

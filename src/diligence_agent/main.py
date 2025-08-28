@@ -5,9 +5,7 @@ import argparse
 import os
 
 # Suppress all warnings before imports to keep output clean
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=SyntaxWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore")
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
 from datetime import datetime
