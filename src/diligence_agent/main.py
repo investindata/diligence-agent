@@ -5,12 +5,12 @@ import argparse
 import os
 
 # Suppress all warnings before imports to keep output clean
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=SyntaxWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore")
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
 from datetime import datetime
+import time
+import json
 
 from diligence_agent.crew import DiligenceAgent
 from diligence_agent.input_reader import InputReader
@@ -22,6 +22,167 @@ from diligence_agent.generate_tasks_yaml import generate_tasks_yaml
 # Commented out OPIK tracking - not required for core functionality
 # To enable tracking, uncomment and add OPIK_API_KEY to .env
 # track_crewai(project_name="diligence-agent")
+
+def organize_task_outputs(output_path, company_file):
+    """
+    Move and organize task outputs to the session directory.
+    """
+    try:
+        from pathlib import Path
+        import shutil
+        
+        company_name = company_file.replace('.json', '')
+        task_outputs_src = Path("task_outputs")
+        
+        if task_outputs_src.exists():
+            # Create destination directory
+            task_outputs_dest = Path(output_path) / "task_outputs"
+            task_outputs_dest.mkdir(exist_ok=True)
+            
+            # Move and rename files
+            for file in task_outputs_src.glob("*"):
+                if file.is_file():
+                    # Add company name prefix to file
+                    new_name = f"{company_name}_{file.name}"
+                    dest_file = task_outputs_dest / new_name
+                    shutil.move(str(file), str(dest_file))
+            
+            # Create summary file
+            summary_file = task_outputs_dest / f"{company_name}_analysis_summary.md"
+            with open(summary_file, 'w') as f:
+                f.write(f"# Analysis Summary for {company_name.title()}\n\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
+                f.write("## Task Outputs:\n\n")
+                f.write("The following intermediate outputs show what analysis drove the final investment decision:\n\n")
+                f.write("1. **Data Validation** (`1_data_validation.json`) - Verified facts, completeness scores, red flags\n")
+                f.write("2. **Overview Section** (`2_overview.md`) - Company overview and mission\n")
+                f.write("3. **Why Interesting** (`3_why_interesting.md`) - Investment thesis\n")
+                f.write("4. **Product Analysis** (`4_product.md`) - Product deep dive\n")
+                f.write("5. **Market Analysis** (`5_market.md`) - TAM and market dynamics\n")
+                f.write("6. **Competitive Landscape** (`6_competitive.md`) - Competition analysis\n")
+                f.write("7. **Team Section** (`7_team.md`) - Team backgrounds\n")
+                f.write("8. **Founder Assessment** (`8_founder_assessment.md`) - Founder quality rating (A/B/C) and analysis\n")
+                f.write("9. **Full Report** (`9_full_report.md`) - Compiled investment report\n")
+                f.write("10. **Executive Summary** (`10_executive_summary.md`) - Final investment recommendation\n\n")
+                f.write("## How to Use These Outputs:\n\n")
+                f.write("- Review the **Data Validation** to understand what facts were verified\n")
+                f.write("- Check the **Founder Assessment** for the detailed founder rating\n")
+                f.write("- Read individual sections to understand specific concerns\n")
+                f.write("- The **Executive Summary** synthesizes all findings into the final recommendation\n")
+            
+            print(f"📂 Task outputs organized in: {task_outputs_dest}/")
+            
+    except Exception as e:
+        print(f"Note: Could not organize task outputs: {e}")
+
+def save_task_outputs(crew, output_path, company_file):
+    """
+    Save all task outputs to separate files for analysis.
+    This helps understand what drove the final investment decision.
+    """
+    try:
+        from pathlib import Path
+        
+        # Create task_outputs subdirectory
+        task_output_dir = Path(output_path) / "task_outputs"
+        task_output_dir.mkdir(exist_ok=True)
+        
+        company_name = company_file.replace('.json', '')
+        
+        # Define task names and their output files
+        task_mapping = {
+            'data_organizer_task': f'{company_name}_1_data_validation.json',
+            'overview_section_writer_task': f'{company_name}_2_overview.md',
+            'why_interesting_section_writer_task': f'{company_name}_3_why_interesting.md',
+            'product_section_writer_task': f'{company_name}_4_product.md',
+            'market_section_writer_task': f'{company_name}_5_market.md',
+            'competitive_landscape_section_writer_task': f'{company_name}_6_competitive.md',
+            'team_section_writer_task': f'{company_name}_7_team.md',
+            'founder_assessment_task': f'{company_name}_8_founder_assessment.md',
+            'report_writer_task': f'{company_name}_9_full_report.md',
+            'executive_summary_task': f'{company_name}_10_executive_summary.md'
+        }
+        
+        # Try to access task results if available
+        if hasattr(crew, 'tasks'):
+            for task in crew.tasks:
+                if hasattr(task, 'output') and task.output:
+                    # Get task name from config
+                    task_name = None
+                    if hasattr(task, 'config') and 'agent' in task.config:
+                        agent_name = str(task.config['agent'])
+                        # Map agent to task name
+                        if 'Data Validator' in agent_name:
+                            task_name = 'data_organizer_task'
+                        elif 'Section Writer' in agent_name:
+                            # Determine which section based on description
+                            if hasattr(task, 'config') and 'description' in task.config:
+                                desc = task.config['description'].lower()
+                                if 'overview' in desc:
+                                    task_name = 'overview_section_writer_task'
+                                elif 'interesting' in desc:
+                                    task_name = 'why_interesting_section_writer_task'
+                                elif 'product' in desc:
+                                    task_name = 'product_section_writer_task'
+                                elif 'market' in desc:
+                                    task_name = 'market_section_writer_task'
+                                elif 'competitive' in desc:
+                                    task_name = 'competitive_landscape_section_writer_task'
+                                elif 'team' in desc:
+                                    task_name = 'team_section_writer_task'
+                        elif 'Founder' in agent_name:
+                            task_name = 'founder_assessment_task'
+                        elif 'Report Writer' in agent_name:
+                            task_name = 'report_writer_task'
+                        elif 'Investment' in agent_name or 'Decision' in agent_name:
+                            task_name = 'executive_summary_task'
+                    
+                    # Save the output
+                    if task_name and task_name in task_mapping:
+                        output_file = task_output_dir / task_mapping[task_name]
+                        
+                        # Convert output to string
+                        output_content = str(task.output)
+                        
+                        # Save as JSON for data validation task
+                        if task_name == 'data_organizer_task':
+                            try:
+                                # Try to parse as JSON
+                                json_data = json.loads(output_content) if isinstance(output_content, str) else output_content
+                                with open(output_file, 'w') as f:
+                                    json.dump(json_data, f, indent=2)
+                            except:
+                                # If not valid JSON, save as text
+                                with open(output_file, 'w') as f:
+                                    f.write(output_content)
+                        else:
+                            # Save as markdown for other tasks
+                            with open(output_file, 'w') as f:
+                                f.write(output_content)
+        
+        # Create a summary file listing all outputs
+        summary_file = task_output_dir / f"{company_name}_task_summary.md"
+        with open(summary_file, 'w') as f:
+            f.write(f"# Task Outputs Summary for {company_name.title()}\n\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
+            f.write("## Task Outputs Saved:\n\n")
+            f.write("These intermediate outputs show what analysis drove the final investment decision:\n\n")
+            f.write("1. **Data Validation** - Verified facts, completeness scores, red flags\n")
+            f.write("2. **Overview Section** - Company overview and mission\n")
+            f.write("3. **Why Interesting** - Investment thesis\n")
+            f.write("4. **Product Analysis** - Product deep dive\n")
+            f.write("5. **Market Analysis** - TAM and market dynamics\n")
+            f.write("6. **Competitive Landscape** - Competition analysis\n")
+            f.write("7. **Team Section** - Team backgrounds\n")
+            f.write("8. **Founder Assessment** - Founder quality rating and analysis\n")
+            f.write("9. **Full Report** - Compiled investment report\n")
+            f.write("10. **Executive Summary** - Final investment recommendation\n")
+        
+        print(f"📁 Task outputs saved to: {task_output_dir}/")
+        
+    except Exception as e:
+        print(f"Note: Could not save all task outputs: {e}")
+        # Don't fail the main process if output saving fails
 
 def get_user_selection(available_companies):
     """
@@ -118,6 +279,10 @@ def run_company_analysis(company_file: str, output_dir: str = "output"):
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True)
         
+        # Create task_outputs directory for intermediate results
+        task_outputs_path = Path("task_outputs")
+        task_outputs_path.mkdir(exist_ok=True)
+        
         reader = InputReader()
         
         # List available companies to help with errors
@@ -143,10 +308,42 @@ def run_company_analysis(company_file: str, output_dir: str = "output"):
         }
         
         print(f"\n{'='*60}")
-        print(f"Running diligence analysis for: {company_data.company_name}")
+        print(f"🚀 Starting diligence analysis for: {company_data.company_name}")
+        print(f"{'='*60}")
+        print(f"")
+        print(f"📊 Analysis Pipeline (10 tasks):")
+        print(f"   Phase 1: Data Validation & Verification")
+        print(f"   Phase 2: Parallel Analysis (7 concurrent tasks)")
+        print(f"           - 6 Report Sections")
+        print(f"           - Founder Assessment")
+        print(f"   Phase 3: Report Compilation")
+        print(f"   Phase 4: Executive Summary & Investment Decision")
+        print(f"")
+        print(f"⏱️  Estimated time: 10-15 minutes")
+        print(f"💡 Tip: Look for task IDs and ✅ symbols to track progress")
         print(f"{'='*60}\n")
         
-        result = DiligenceAgent().crew().kickoff(inputs=inputs)
+        # Start timer
+        start_time = time.time()
+        
+        # Run the crew
+        crew_instance = DiligenceAgent()
+        crew = crew_instance.crew()
+        result = crew.kickoff(inputs=inputs)
+        
+        # Calculate total time
+        end_time = time.time()
+        duration = end_time - start_time
+        minutes = int(duration // 60)
+        seconds = int(duration % 60)
+        
+        print(f"\n{'='*60}")
+        print(f"✅ Analysis Complete!")
+        print(f"⏱️  Total time: {minutes:02d}:{seconds:02d}")
+        print(f"{'='*60}")
+        
+        # Move task outputs to session directory
+        organize_task_outputs(output_path, company_file)
         
         # Move output files to output directory with company name
         company_name = company_file.replace('.json', '')

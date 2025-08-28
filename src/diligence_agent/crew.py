@@ -23,8 +23,8 @@ class DiligenceAgent():
             verbose=True,
             llm=llm,
             tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()],
-            max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
-            max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
+            max_iter=3,
+            max_retry_limit=1
         )
 
     @agent
@@ -43,8 +43,7 @@ class DiligenceAgent():
             verbose=True,
             llm=llm,
             tools=[GoogleDocProcessor()],
-            #max_iter=5, # This agent will attempt to refine its answer a maximum of 5 times.
-            max_retry_limit=1 # This agent will retry a task only once if it encounters an error.
+            max_retry_limit=1
         )
     
     @agent
@@ -52,7 +51,7 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['investment_decision_maker'], # type: ignore[index]
             verbose=True,
-            llm=llm,  # Using the most advanced model for investment decisions
+            llm=llm,
             tools=[],  # No tools needed - just analysis and decision
             max_retry_limit=1
         )
@@ -62,68 +61,74 @@ class DiligenceAgent():
         return Task(
             config=self.tasks_config['data_organizer_task'], # type: ignore[index]
             llm=llm,
+            output_file="task_outputs/1_data_validation.json"  
         )
 
     @task
     def overview_section_writer_task(self) -> Task:
-        print("TASKS CONFIG:", self.tasks_config)
         return Task(
            config=self.tasks_config['overview_section_writer_task'], # type: ignore[index]
-           llm=llm,
+           llm=llm,  
            context=[self.data_organizer_task()],
-           async_execution=async_execution
+           async_execution=async_execution,
+           output_file="task_outputs/2_overview.md"
         )
 
     @task
     def why_interesting_section_writer_task(self) -> Task:
        return Task(
            config=self.tasks_config['why_interesting_section_writer_task'], # type: ignore[index]
-           llm=llm,
+           llm=llm",  
            context=[self.data_organizer_task()],
-           async_execution=async_execution
+           async_execution=async_execution,
+           output_file="task_outputs/3_why_interesting.md"
        )
     
     @task
     def product_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['product_section_writer_task'], # type: ignore[index]
-            llm=llm,
+            llm=llm,  
             context=[self.data_organizer_task()],
-            async_execution=async_execution
+            async_execution=async_execution,
+            output_file="task_outputs/4_product.md"
         )
     
     @task
     def market_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['market_section_writer_task'], # type: ignore[index]
-            llm=llm,
+            llm=llm,  
             context=[self.data_organizer_task()],
-            async_execution=async_execution
+            async_execution=async_execution,
+            output_file="task_outputs/5_market.md"
         )
     
     @task
     def competitive_landscape_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['competitive_landscape_section_writer_task'], # type: ignore[index]
-            llm=llm,
+            llm=llm,  
             context=[self.data_organizer_task()],
-            async_execution=async_execution
+            async_execution=async_execution,
+            output_file="task_outputs/6_competitive_landscape.md"
         )
     
     @task
     def team_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['team_section_writer_task'], # type: ignore[index]
-            llm=llm,
+            llm=llm,  
             context=[self.data_organizer_task()],
-            async_execution=async_execution
+            async_execution=async_execution,
+            output_file="task_outputs/7_team.md"
         )
     
     @task
     def report_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['report_writer_task'], # type: ignore[index]
-            llm="gpt-4.1",
+            llm=llm,
             context=[
                 self.overview_section_writer_task(),
                 self.why_interesting_section_writer_task(),
@@ -131,15 +136,16 @@ class DiligenceAgent():
                 self.market_section_writer_task(),
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
+                self.founder_assessment_task(),
             ],
-            output_file="full_due_diligence_report.md",  # Save to file
+            output_file="full_diligence_report.md"
         )
     
     @task
     def executive_summary_task(self) -> Task:
         return Task(
             config=self.tasks_config['executive_summary_task'], # type: ignore[index]
-            llm="gpt-4.1",
+            llm=llm,
             context=[
                 self.data_organizer_task(),
                 self.overview_section_writer_task(),
@@ -148,19 +154,19 @@ class DiligenceAgent():
                 self.market_section_writer_task(),
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
+                self.founder_assessment_task(),
                 self.report_writer_task(),
             ],
-            output_file="executive_summary_and_recommendation.md"  # Save to file
+            output_file="executive_summary_and_recommendation.md"
         )
 
     @crew
     def crew(self) -> Crew:
-        """Creates the DiligenceAgent crew"""
+        """Creates the DiligenceAgent crew with async parallel execution"""
 
         return Crew(
-            agents=self.agents, # Automatically created by the @agent decorator
-            tasks=self.tasks, # Automatically created by the @task decorator
+            agents=self.agents,
+            tasks=self.tasks,
             process=Process.sequential,
-            verbose=True,
-            # process=Process.hierarchical, # In case you wanna use that instead https://docs.crewai.com/how-to/Hierarchical/
+            verbose=True
         )

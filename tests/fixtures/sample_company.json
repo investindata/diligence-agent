@@ -1,0 +1,13 @@
+{
+  "company_name": "TestCorp AI",
+  "company_sources": [
+    "https://docs.google.com/document/d/test123/edit",
+    "TestCorp is an AI startup focused on machine learning infrastructure.",
+    "Founded in 2023, we have raised $5M in seed funding."
+  ],
+  "reference_sources": [
+    "https://example.com/ai-market-report",
+    "Sample reference document about AI infrastructure market"
+  ],
+  "current_date": "2025-01-27"
+}
