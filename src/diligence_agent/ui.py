@@ -9,6 +9,7 @@ import sys
 from datetime import datetime
 
 from diligence_agent.input_reader import InputReader
+from diligence_agent.crew import default_model, default_temperature
 
 
 class DueDiligenceUI:
@@ -27,8 +28,8 @@ class DueDiligenceUI:
             print(f"Error getting companies: {e}")
             return []
     
-    def run_analysis(self, company_name: str, progress_callback=None) -> str:
-        """Run the diligence analysis for a company"""
+    def run_analysis(self, company_name: str, model: str, temperature: float, progress_callback=None) -> str:
+        """Run the diligence analysis for a company with specified model and temperature"""
         if not company_name:
             return "No company selected"
         
@@ -36,8 +37,8 @@ class DueDiligenceUI:
             if progress_callback:
                 progress_callback("Starting analysis...")
             
-            # Run the analysis using subprocess
-            cmd = [sys.executable, "-m", "diligence_agent", company_name]
+            # Run the analysis using subprocess with model and temperature parameters
+            cmd = [sys.executable, "-m", "diligence_agent", company_name, "--model", model, "--temperature", str(temperature)]
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -305,6 +306,26 @@ class DueDiligenceUI:
                         interactive=True
                     )
                     
+                    gr.Markdown("### Model Configuration")
+                    
+                    # Model selection dropdown
+                    model_dropdown = gr.Dropdown(
+                        label="Select Model",
+                        choices=["gpt-4o-mini", "gpt-4.1"],
+                        value=default_model,  # Use default from crew.py
+                        interactive=True
+                    )
+                    
+                    # Temperature slider
+                    temperature_slider = gr.Slider(
+                        label="Temperature",
+                        minimum=0.0,
+                        maximum=2.0,
+                        value=default_temperature,  # Use default from crew.py
+                        step=0.1,
+                        interactive=True
+                    )
+                    
                     # Add Run Report button
                     run_report_btn = gr.Button(
                         "Run Report",
@@ -358,7 +379,7 @@ class DueDiligenceUI:
                 """Update report content when company or report type changes"""
                 return self.load_report_content(company_name, report_type)
             
-            def run_analysis_handler(company_name):
+            def run_analysis_handler(company_name, model, temperature):
                 """Handle the run analysis button click"""
                 if not company_name:
                     return (
@@ -381,7 +402,7 @@ class DueDiligenceUI:
                 
                 # Run the analysis in a separate thread
                 def run_in_background():
-                    return self.run_analysis(company_name, progress_callback)
+                    return self.run_analysis(company_name, model, temperature, progress_callback)
                 
                 import concurrent.futures
                 import time
@@ -432,7 +453,7 @@ class DueDiligenceUI:
             # Run report button handler
             run_report_btn.click(
                 fn=run_analysis_handler,
-                inputs=[company_dropdown],
+                inputs=[company_dropdown, model_dropdown, temperature_slider],
                 outputs=[run_report_btn, progress_display, report_type_dropdown, report_display]
             )
             

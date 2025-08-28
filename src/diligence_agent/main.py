@@ -217,7 +217,7 @@ def get_user_selection(available_companies):
             print("\n\nCancelled by user.")
             sys.exit(0)
 
-def run_company_analysis(company_file: str, output_dir: str = "output"):
+def run_company_analysis(company_file: str, args, output_dir: str = "output"):
     """
     Run the crew for a specific company.
     """
@@ -286,7 +286,7 @@ def run_company_analysis(company_file: str, output_dir: str = "output"):
             start_time = time.time()
             
             # Run the crew (files will be saved directly in company folder)
-            crew_instance = DiligenceAgent()
+            crew_instance = DiligenceAgent(model=args.model, temperature=args.temperature)
             crew = crew_instance.crew()
             result = crew.kickoff(inputs=inputs)
             
@@ -341,8 +341,17 @@ Examples:
                        help='Analyze all available companies')
     parser.add_argument('--interactive', '-i', action='store_true',
                        help='Force interactive mode even with arguments')
+    parser.add_argument('--model', '-m', type=str, default='gpt-4o-mini',
+                       choices=['gpt-4o-mini', 'gpt-4.1'],
+                       help='LLM model to use for analysis (default: gpt-4o-mini)')
+    parser.add_argument('--temperature', '-t', type=float, default=0.1,
+                       help='Temperature for LLM model (0.0-2.0, default: 0.1)')
     
     args = parser.parse_args()
+    
+    # Validate temperature range
+    if not (0.0 <= args.temperature <= 2.0):
+        parser.error(f"Temperature must be between 0.0 and 2.0, got: {args.temperature}")
     
     # Get available companies
     reader = InputReader()
@@ -400,7 +409,7 @@ Examples:
         if len(companies) > 1:
             print(f"\n[{i}/{len(companies)}] Processing {company_file}...")
         
-        success = run_company_analysis(company_file, session_dir)
+        success = run_company_analysis(company_file, args, session_dir)
         company_name = company_file.replace('.json', '')
         results[company_name] = success
     
