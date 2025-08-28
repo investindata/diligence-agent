@@ -306,8 +306,6 @@ class DueDiligenceUI:
                         interactive=True
                     )
                     
-                    gr.Markdown("### Model Configuration")
-                    
                     # Model selection dropdown
                     model_dropdown = gr.Dropdown(
                         label="Select Model",
