@@ -72,12 +72,12 @@ if [ $# -eq 0 ]; then
     # No arguments - run interactive mode
     echo -e "${BLUE}Starting interactive mode...${NC}"
     echo ""
-    # Use the clean analyzer that suppresses all warnings
-    uv run python analyze.py 2>&1 | grep -v "DeprecationWarning\|asyncio.get_event_loop"
+    # Use the package directly (will use __main__.py) and filter warnings
+    uv run python -m diligence_agent 2>&1 | grep -v "/site-packages/"
 else
     # Pass all arguments to the Python script
     echo -e "${GREEN}Analyzing: $@${NC}"
     echo ""
-    # For command-line args, we need to use the main module directly
-    uv run python -m diligence_agent "$@" 2>&1 | grep -v "warn\|Deprecat\|asyncio\|pydantic\|litellm"
+    # For command-line args, use the package directly and filter warnings
+    uv run python -m diligence_agent "$@" 2>&1 | grep -v "/site-packages/"
 fi
