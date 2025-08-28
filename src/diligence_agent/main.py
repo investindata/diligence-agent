@@ -23,57 +23,6 @@ from diligence_agent.generate_tasks_yaml import generate_tasks_yaml
 # To enable tracking, uncomment and add OPIK_API_KEY to .env
 # track_crewai(project_name="diligence-agent")
 
-def organize_task_outputs(output_path, company_file):
-    """
-    Move and organize task outputs to the session directory.
-    """
-    try:
-        from pathlib import Path
-        import shutil
-        
-        company_name = company_file.replace('.json', '')
-        task_outputs_src = Path("task_outputs")
-        
-        if task_outputs_src.exists():
-            # Create destination directory
-            task_outputs_dest = Path(output_path) / "task_outputs"
-            task_outputs_dest.mkdir(exist_ok=True)
-            
-            # Move and rename files
-            for file in task_outputs_src.glob("*"):
-                if file.is_file():
-                    # Add company name prefix to file
-                    new_name = f"{company_name}_{file.name}"
-                    dest_file = task_outputs_dest / new_name
-                    shutil.move(str(file), str(dest_file))
-            
-            # Create summary file
-            summary_file = task_outputs_dest / f"{company_name}_analysis_summary.md"
-            with open(summary_file, 'w') as f:
-                f.write(f"# Analysis Summary for {company_name.title()}\n\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
-                f.write("## Task Outputs:\n\n")
-                f.write("The following intermediate outputs show what analysis drove the final investment decision:\n\n")
-                f.write("1. **Data Validation** (`1_data_validation.json`) - Verified facts, completeness scores, red flags\n")
-                f.write("2. **Overview Section** (`2_overview.md`) - Company overview and mission\n")
-                f.write("3. **Why Interesting** (`3_why_interesting.md`) - Investment thesis\n")
-                f.write("4. **Product Analysis** (`4_product.md`) - Product deep dive\n")
-                f.write("5. **Market Analysis** (`5_market.md`) - TAM and market dynamics\n")
-                f.write("6. **Competitive Landscape** (`6_competitive.md`) - Competition analysis\n")
-                f.write("7. **Team Section** (`7_team.md`) - Team backgrounds\n")
-                f.write("8. **Founder Assessment** (`8_founder_assessment.md`) - Founder quality rating (A/B/C) and analysis\n")
-                f.write("9. **Full Report** (`9_full_report.md`) - Compiled investment report\n")
-                f.write("10. **Executive Summary** (`10_executive_summary.md`) - Final investment recommendation\n\n")
-                f.write("## How to Use These Outputs:\n\n")
-                f.write("- Review the **Data Validation** to understand what facts were verified\n")
-                f.write("- Check the **Founder Assessment** for the detailed founder rating\n")
-                f.write("- Read individual sections to understand specific concerns\n")
-                f.write("- The **Executive Summary** synthesizes all findings into the final recommendation\n")
-            
-            print(f"📂 Task outputs organized in: {task_outputs_dest}/")
-            
-    except Exception as e:
-        print(f"Note: Could not organize task outputs: {e}")
 
 def save_task_outputs(crew, output_path, company_file):
     """
@@ -323,44 +272,40 @@ def run_company_analysis(company_file: str, output_dir: str = "output"):
         print(f"💡 Tip: Look for task IDs and ✅ symbols to track progress")
         print(f"{'='*60}\n")
         
-        # Start timer
-        start_time = time.time()
+        # Create company-specific folder and change working directory
+        company_name = company_data.company_name.replace(' ', '_').lower()
+        company_folder = output_path / company_name
+        company_folder.mkdir(exist_ok=True)
         
-        # Run the crew
-        crew_instance = DiligenceAgent()
-        crew = crew_instance.crew()
-        result = crew.kickoff(inputs=inputs)
+        # Store current directory and change to company folder
+        original_dir = os.getcwd()
+        os.chdir(company_folder)
         
-        # Calculate total time
-        end_time = time.time()
-        duration = end_time - start_time
-        minutes = int(duration // 60)
-        seconds = int(duration % 60)
-        
-        print(f"\n{'='*60}")
-        print(f"✅ Analysis Complete!")
-        print(f"⏱️  Total time: {minutes:02d}:{seconds:02d}")
-        print(f"{'='*60}")
-        
-        # Move task outputs to session directory
-        organize_task_outputs(output_path, company_file)
-        
-        # Move output files to output directory with company name
-        company_name = company_file.replace('.json', '')
-        
-        # Move executive summary
-        exec_summary = Path("executive_summary_and_recommendation.md")
-        if exec_summary.exists():
-            new_path = output_path / f"{company_name}_executive_summary.md"
-            exec_summary.rename(new_path)
-            print(f"\n✅ Executive summary saved to: {new_path}")
-        
-        # Move full due diligence report
-        full_report = Path("full_due_diligence_report.md")
-        if full_report.exists():
-            new_full_report_path = output_path / f"{company_name}_full_due_diligence_report.md"
-            full_report.rename(new_full_report_path)
-            print(f"\n📄 Full report saved to: {new_full_report_path}")
+        try:
+            # Start timer
+            start_time = time.time()
+            
+            # Run the crew (files will be saved directly in company folder)
+            crew_instance = DiligenceAgent()
+            crew = crew_instance.crew()
+            result = crew.kickoff(inputs=inputs)
+            
+            # Calculate total time
+            end_time = time.time()
+            duration = end_time - start_time
+            minutes = int(duration // 60)
+            seconds = int(duration % 60)
+            
+            print(f"\n{'='*60}")
+            print(f"✅ Analysis Complete!")
+            print(f"⏱️  Total time: {minutes:02d}:{seconds:02d}")
+            print(f"{'='*60}")
+            
+            print(f"\n✅ All reports saved to: {company_folder}/")
+            
+        finally:
+            # Always restore original directory
+            os.chdir(original_dir)
         
         return True
         

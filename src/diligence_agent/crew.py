@@ -55,13 +55,24 @@ class DiligenceAgent():
             tools=[],  # No tools needed - just analysis and decision
             max_retry_limit=1
         )
+    
+    @agent
+    def founder_assessor(self) -> Agent:
+        return Agent(
+            config=self.agents_config['founder_assessor'], # type: ignore[index]
+            verbose=True,
+            llm=llm,
+            tools=[SerperDevTool(), SerperScrapeWebsiteTool()],
+            max_iter=3,
+            max_retry_limit=1
+        )
 
     @task
     def data_organizer_task(self) -> Task:
         return Task(
             config=self.tasks_config['data_organizer_task'], # type: ignore[index]
             llm=llm,
-            output_file="task_outputs/1_data_validation.json"  
+            output_file="1_data_validation.json"  
         )
 
     @task
@@ -71,17 +82,17 @@ class DiligenceAgent():
            llm=llm,  
            context=[self.data_organizer_task()],
            async_execution=async_execution,
-           output_file="task_outputs/2_overview.md"
+           output_file="2_overview_section.md"
         )
 
     @task
     def why_interesting_section_writer_task(self) -> Task:
        return Task(
            config=self.tasks_config['why_interesting_section_writer_task'], # type: ignore[index]
-           llm=llm",  
+           llm=llm,  
            context=[self.data_organizer_task()],
            async_execution=async_execution,
-           output_file="task_outputs/3_why_interesting.md"
+           output_file="3_why_interesting_section.md"
        )
     
     @task
@@ -91,7 +102,7 @@ class DiligenceAgent():
             llm=llm,  
             context=[self.data_organizer_task()],
             async_execution=async_execution,
-            output_file="task_outputs/4_product.md"
+            output_file="4_product_section.md"
         )
     
     @task
@@ -101,7 +112,7 @@ class DiligenceAgent():
             llm=llm,  
             context=[self.data_organizer_task()],
             async_execution=async_execution,
-            output_file="task_outputs/5_market.md"
+            output_file="5_market_section.md"
         )
     
     @task
@@ -111,7 +122,7 @@ class DiligenceAgent():
             llm=llm,  
             context=[self.data_organizer_task()],
             async_execution=async_execution,
-            output_file="task_outputs/6_competitive_landscape.md"
+            output_file="6_competitive_landscape_section.md"
         )
     
     @task
@@ -121,7 +132,17 @@ class DiligenceAgent():
             llm=llm,  
             context=[self.data_organizer_task()],
             async_execution=async_execution,
-            output_file="task_outputs/7_team.md"
+            output_file="7_team_section.md"
+        )
+    
+    @task
+    def founder_assessment_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['founder_assessment_task'], # type: ignore[index]
+            llm=llm,
+            context=[self.data_organizer_task()],
+            async_execution=async_execution,
+            output_file="8_founder_assessment.md"
         )
     
     @task
@@ -138,7 +159,7 @@ class DiligenceAgent():
                 self.team_section_writer_task(),
                 self.founder_assessment_task(),
             ],
-            output_file="full_diligence_report.md"
+            output_file="9_full_diligence_report.md"
         )
     
     @task
@@ -157,7 +178,7 @@ class DiligenceAgent():
                 self.founder_assessment_task(),
                 self.report_writer_task(),
             ],
-            output_file="executive_summary_and_recommendation.md"
+            output_file="10_executive_summary.md"
         )
 
     @crew

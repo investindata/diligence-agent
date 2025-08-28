@@ -21,7 +21,8 @@ class DueDiligenceUI:
         """Get all companies from input_sources directory"""
         try:
             available = self.input_reader.list_available_companies()
-            return [c.replace('.json', '') for c in available]
+            companies = [c.replace('.json', '') for c in available]
+            return sorted(companies)
         except Exception as e:
             print(f"Error getting companies: {e}")
             return []
@@ -95,38 +96,60 @@ class DueDiligenceUI:
             return []
         
         reports = []
-        report_patterns = {
-            "Executive Summary": f"{company_name}_executive_summary.md",
-            "Full Report": f"{company_name}_full_due_diligence_report.md"
-        }
         
-        # Look for known report types
-        for report_type, filename in report_patterns.items():
-            latest_file = self.find_latest_report_by_filename(filename, session_dirs)
-            if latest_file:
+        # Look in company subdirectories (new structure)
+        for session_dir in session_dirs:
+            # Convert company name to folder name format (lowercase with underscores)
+            company_folder_name = company_name.replace(' ', '_').lower()
+            company_dir = session_dir / company_folder_name
+            
+            if not company_dir.exists():
+                continue
+                
+            # Find all files that match the numbered pattern
+            for file_path in company_dir.glob("[0-9]*"):
+                filename = file_path.name
+                
+                # Extract report type from filename
+                # Format: {number}_{description}.{ext}
+                # e.g., "8_founder_assessment.md" -> "Founder Assessment"
+                
+                # Extract number and description (e.g., "8_founder_assessment.md" -> "8", "founder_assessment.md")
+                number_prefix = ""
+                if "_" in filename:
+                    parts = filename.split("_", 1)
+                    if parts[0].isdigit():
+                        number_prefix = parts[0] + ". "
+                        name_parts = parts[1]
+                    else:
+                        name_parts = filename
+                else:
+                    name_parts = filename
+                
+                # Remove file extension and convert to readable format
+                report_name = name_parts.rsplit(".", 1)[0]  # Remove extension
+                report_type = number_prefix + report_name.replace("_", " ").title()
+                
                 reports.append({
                     "type": report_type,
-                    "path": str(latest_file),
+                    "path": str(file_path),
                     "filename": filename
                 })
         
-        # Look for other potential reports (future extensibility)
-        for session_dir in session_dirs:
-            for file_path in session_dir.glob(f"{company_name}_*.md"):
-                filename = file_path.name
-                # Skip already processed files
-                if filename not in [r["filename"] for r in reports]:
-                    # Create a readable name from filename
-                    report_type = filename.replace(f"{company_name}_", "").replace(".md", "").replace("_", " ").title()
-                    latest_file = self.find_latest_report_by_filename(filename, session_dirs)
-                    if latest_file:
-                        reports.append({
-                            "type": report_type,
-                            "path": str(latest_file),
-                            "filename": filename
-                        })
+        # Remove duplicates and return most recent for each type
+        unique_reports = {}
+        for report in reports:
+            report_type = report["type"]
+            if report_type not in unique_reports:
+                unique_reports[report_type] = report
+            else:
+                # Keep the most recent file
+                current_path = Path(unique_reports[report_type]["path"])
+                new_path = Path(report["path"])
+                if new_path.stat().st_mtime > current_path.stat().st_mtime:
+                    unique_reports[report_type] = report
         
-        return reports
+        return list(unique_reports.values())
     
     def find_latest_report_by_filename(self, filename: str, session_dirs: List[Path]) -> Optional[Path]:
         """Find the latest version of a specific report file across sessions"""
@@ -225,7 +248,20 @@ class DueDiligenceUI:
             return []
         
         available_reports = self.get_available_reports(company_name)
-        return [report["type"] for report in available_reports]
+        report_types = [report["type"] for report in available_reports]
+        
+        # Sort numerically by number prefix, then alphabetically
+        def sort_key(report_type):
+            if ". " in report_type:
+                number_part = report_type.split(". ", 1)[0]
+                try:
+                    return (0, int(number_part))  # (sort_group, number)
+                except ValueError:
+                    return (1, report_type)  # Non-numeric prefixes come after
+            else:
+                return (1, report_type)  # No number prefix, sort alphabetically after numbered items
+        
+        return sorted(report_types, key=sort_key)
     
     def create_interface(self):
         """Create the Gradio interface for report viewing"""
