@@ -6,6 +6,7 @@ import base64
 import threading
 import subprocess
 import sys
+import json
 from datetime import datetime
 
 from diligence_agent.input_reader import InputReader
@@ -224,7 +225,21 @@ class DueDiligenceUI:
             with open(report_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Add metadata header
+            # Check if it's a JSON file
+            if report_path.suffix.lower() == '.json':
+                try:
+                    # Parse and format JSON
+                    json_data = json.loads(content)
+                    formatted_json = json.dumps(json_data, indent=2)
+                    
+                    # Simple metadata for JSON
+                    metadata = f"**{report_type}** - {datetime.fromtimestamp(report_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    return metadata + f"```json\n{formatted_json}\n```"
+                except json.JSONDecodeError:
+                    # Fall back to plain text if invalid JSON
+                    pass
+            
+            # Default markdown formatting with full metadata
             mod_time = datetime.fromtimestamp(report_path.stat().st_mtime)
             session_name = report_path.parent.name
             
