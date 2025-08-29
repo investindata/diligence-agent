@@ -438,12 +438,17 @@ class DueDiligenceUI:
                     
                     result = future.result()
                 
+                # Calculate total execution time
+                total_time = time.time() - start_time
+                mins, secs = divmod(int(total_time), 60)
+                time_display = f"{mins:02d}:{secs:02d}"
+                
                 # Re-enable button and update report types
                 updated_report_types = self.get_report_types_for_company(company_name)
                 
                 yield (
                     gr.update(interactive=True, value="Run Report"),  # run_report_btn
-                    gr.update(value="Analysis completed! Reports are now available.", visible=True),  # progress_display
+                    gr.update(value=f"Analysis completed in {time_display}! Reports are now available.", visible=True),  # progress_display
                     gr.update(choices=updated_report_types, value=None, visible=True),  # report_type_dropdown - show after completion
                     gr.update()   # report_display
                 )
