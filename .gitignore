@@ -11,6 +11,7 @@ output_*/
 *.md
 !README.md
 !README_BUSINESS.md
+!GOOGLE_OAUTH_SETUP.md
 *_executive_summary.md
 ALL_COMPANIES_SUMMARY.md
 
