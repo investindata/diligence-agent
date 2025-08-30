@@ -69,9 +69,17 @@ def generate_tasks_yaml() -> None:
         "    {reference_sources}\n\n"
         "    Your report should contain exactly the following sections:\n\n"
         "SECTIONS\n"
+        "    \n"
+        "    IMPORTANT OUTPUT FORMAT:\n"
+        "    - Output ONLY the markdown content, nothing else\n"
+        "    - Do NOT wrap your output in code blocks or backticks\n"
+        "    - Do NOT include any explanatory text before or after the markdown\n"
+        "    - Start directly with the markdown headers and content\n"
+        "    - The output should be ready to save as a .md file without any modifications\n"
+        "    \n"
         "    The current date for this analysis is {current_date}.\n"
         "  expected_output: >\n"
-        "    A well-structured investment report in Markdown format.\n"
+        "    A well-structured investment report in pure Markdown format, ready to be saved directly as a .md file without any wrapper text or code blocks.\n"
         "  agent: report_writer"
     )
     

@@ -4,6 +4,12 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
+from crewai.llm import LLM
+
+# Default configuration
+default_model = "gpt-4o-mini"
+default_temperature = 0.1
+async_execution = True
 
 
 @CrewBase
@@ -12,13 +18,21 @@ class DiligenceAgent():
 
     agents: List[BaseAgent]
     tasks: List[Task]
+    
+    def __init__(self, model: str = default_model, temperature: float = default_temperature):
+        """Initialize the DiligenceAgent with configurable model and temperature"""
+        super().__init__()
+        self.llm = LLM(
+            model=model,
+            temperature=temperature
+        )
 
     @agent
     def data_organizer(self) -> Agent:
         return Agent(
             config=self.agents_config['data_organizer'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4o-mini",
+            llm=self.llm,
             tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()],
             max_iter=3,
             max_retry_limit=1
@@ -29,7 +43,7 @@ class DiligenceAgent():
        return Agent(
            config=self.agents_config['section_writer'], # type: ignore[index]
            verbose=True,
-           llm="gpt-4o-mini",
+           llm=self.llm,
            tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()]
        )
     
@@ -38,7 +52,7 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['report_writer'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4o-mini",
+            llm=self.llm,
             tools=[GoogleDocProcessor()],
             max_retry_limit=1
         )
@@ -48,8 +62,8 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['investment_decision_maker'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4o-mini",
-            tools=[],
+            llm=self.llm,
+            tools=[],  # No tools needed - just analysis and decision
             max_retry_limit=1
         )
     
@@ -58,7 +72,7 @@ class DiligenceAgent():
         return Agent(
             config=self.agents_config['founder_assessor'], # type: ignore[index]
             verbose=True,
-            llm="gpt-4o-mini",
+            llm=self.llm,
             tools=[SerperDevTool(), SerperScrapeWebsiteTool()],
             max_iter=3,
             max_retry_limit=1
@@ -68,78 +82,85 @@ class DiligenceAgent():
     def data_organizer_task(self) -> Task:
         return Task(
             config=self.tasks_config['data_organizer_task'], # type: ignore[index]
-            llm="gpt-4o-mini",
-            output_file="task_outputs/1_data_validation.json"
+            llm=self.llm,
+            output_file="1_data_validation.json"  
         )
 
     @task
     def overview_section_writer_task(self) -> Task:
         return Task(
            config=self.tasks_config['overview_section_writer_task'], # type: ignore[index]
-           llm="gpt-4o-mini",  
+           llm=self.llm,  
            context=[self.data_organizer_task()],
-           output_file="task_outputs/2_overview.md"
+           async_execution=async_execution,
+           output_file="2_overview_section.md"
         )
 
     @task
     def why_interesting_section_writer_task(self) -> Task:
        return Task(
            config=self.tasks_config['why_interesting_section_writer_task'], # type: ignore[index]
-           llm="gpt-4o-mini",  
+           llm=self.llm,  
            context=[self.data_organizer_task()],
-           output_file="task_outputs/3_why_interesting.md"
+           async_execution=async_execution,
+           output_file="3_why_interesting_section.md"
        )
     
     @task
     def product_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['product_section_writer_task'], # type: ignore[index]
-            llm="gpt-4o-mini",  
+            llm=self.llm,  
             context=[self.data_organizer_task()],
-             output_file="task_outputs/4_product.md"
+            async_execution=async_execution,
+            output_file="4_product_section.md"
         )
     
     @task
     def market_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['market_section_writer_task'], # type: ignore[index]
-            llm="gpt-4o-mini",  
+            llm=self.llm,  
             context=[self.data_organizer_task()],
-             output_file="task_outputs/5_market.md"
+            async_execution=async_execution,
+            output_file="5_market_section.md"
         )
     
     @task
     def competitive_landscape_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['competitive_landscape_section_writer_task'], # type: ignore[index]
-            llm="gpt-4o-mini",  
+            llm=self.llm,  
             context=[self.data_organizer_task()],
-             output_file="task_outputs/6_competitive.md"
+            async_execution=async_execution,
+            output_file="6_competitive_landscape_section.md"
         )
     
     @task
     def team_section_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['team_section_writer_task'], # type: ignore[index]
-            llm="gpt-4o-mini",  
+            llm=self.llm,  
             context=[self.data_organizer_task()],
-             output_file="task_outputs/7_team.md"
+            async_execution=async_execution,
+            output_file="7_team_section.md"
         )
     
     @task
     def founder_assessment_task(self) -> Task:
         return Task(
             config=self.tasks_config['founder_assessment_task'], # type: ignore[index]
-            llm="gpt-4o-mini",
+            llm=self.llm,
             context=[self.data_organizer_task()],
-             output_file="task_outputs/8_founder_assessment.md"
+            async_execution=async_execution,
+            output_file="8_founder_assessment.md"
         )
     
     @task
     def report_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['report_writer_task'], # type: ignore[index]
-            llm="gpt-4o-mini",
+            llm=self.llm,
             context=[
                 self.overview_section_writer_task(),
                 self.why_interesting_section_writer_task(),
@@ -149,14 +170,14 @@ class DiligenceAgent():
                 self.team_section_writer_task(),
                 self.founder_assessment_task(),
             ],
-            output_file="task_outputs/9_full_report.md"
+            output_file="9_full_diligence_report.md"
         )
     
     @task
     def executive_summary_task(self) -> Task:
         return Task(
             config=self.tasks_config['executive_summary_task'], # type: ignore[index]
-            llm="gpt-4o-mini",
+            llm=self.llm,
             context=[
                 self.data_organizer_task(),
                 self.overview_section_writer_task(),
@@ -168,7 +189,7 @@ class DiligenceAgent():
                 self.founder_assessment_task(),
                 self.report_writer_task(),
             ],
-            output_file="executive_summary_and_recommendation.md"
+            output_file="10_executive_summary.md"
         )
 
     @crew

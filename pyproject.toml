@@ -10,10 +10,15 @@ dependencies = [
     "opik>=1.8.27",
     "requests>=2.32.0",
     "pytest>=8.0.0",
+    "gradio>=4.0.0",
+    "google-auth>=2.0.0",
+    "google-auth-oauthlib>=0.5.0",
+    "google-api-python-client>=2.0.0",
 ]
 
 [project.scripts]
 diligence_agent = "diligence_agent.main:run"
+ui = "diligence_agent.ui:launch_ui"
 run_crew = "diligence_agent.main:run"
 train = "diligence_agent.main:train"
 replay = "diligence_agent.main:replay"
