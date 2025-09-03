@@ -2,7 +2,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
-from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool, MCPServerAdapter
+from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.mcp_config import get_slack_tools
 from crewai.llm import LLM
