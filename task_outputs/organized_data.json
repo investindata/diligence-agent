@@ -1,0 +1,68 @@
+```json
+{
+  "company": {
+    "name": "TensorStax",
+    "date": "2025-09-04",
+    "questionnaire": {
+      "target_market": {
+        "total_addressable_market": {
+          "TAM": "$66.7 billion by 2034",
+          "SAM": "$2.7 billion in 2024",
+          "CAGR": "37.8%"
+        },
+        "initial_customers": "Larger mid market companies with disproportionate data challenges, mainly fintechs",
+        "adjacent_markets": "Large enterprises with massive amounts of data, e.g., retail, manufacturing"
+      },
+      "problem_need": {
+        "pain_point": "Data Engineers",
+        "current_solving_methods": "Hiring more people"
+      },
+      "solution": {
+        "long_term_vision": "Agentic data OS that builds and maintains pipelines autonomously",
+        "user_and_budget_owner": {
+          "user": "Data engineers",
+          "budget_owner": "Head of data"
+        },
+        "budget_fit": "New line item under developer AI productivity tools",
+        "deployment": {
+          "type": "SaaS or on-prem",
+          "setup_effort": "SaaS is self-serve, on-prem can be set up in about 30 minutes",
+          "time_to_value": "Teams see value in days"
+        }
+      },
+      "competition": {
+        "major_competitors": "Cursor, Claude Code",
+        "differentiation": "Built specifically for data engineering with a compiler layer and self-correcting agents"
+      },
+      "traction_revenue_model": {
+        "product_in_customers_hands": true,
+        "paying_customers": 3,
+        "average_annual_selling_price": "50-250k",
+        "pricing_model": "Flat for now, later usage-based",
+        "average_sales_cycle": "3-8 months"
+      },
+      "strategy_gtm": {
+        "customer_acquisition": "Warm intros and outbound",
+        "go_to_market": "Direct sales"
+      },
+      "financials": {
+        "current_arr": "340k",
+        "past_12_months_revenue": "0",
+        "projected_revenue_24_months": "2M+",
+        "gross_margins": "~80%",
+        "burn_rate": "200k"
+      },
+      "additional_questions": {
+        "time_to_value": "First 2 weeks",
+        "differentiation_vs_claude": "Built specifically for data engineering with legacy and verification features",
+        "defensibility": "Capable of rapid deployment, value seen in weeks",
+        "long_term_opportunity": {
+          "description": "Owning the entire data stack with seamless infrastructure management",
+          "challenges": "Maintaining performance across layers"
+        },
+        "unique_agentic_framework": "Actions verified by compilers enabling self-correction"
+      }
+    }
+  }
+}
+```
