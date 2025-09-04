@@ -8,7 +8,7 @@ from src.diligence_agent.mcp_config import get_slack_tools
 from crewai.llm import LLM
 
 # Default configuration
-AVAILABLE_MODELS = ["gpt-4o-mini", "gpt-4.1"]
+AVAILABLE_MODELS = ["gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"]
 default_model = "gpt-4o-mini"
 default_temperature = 0.1
 async_execution = True
