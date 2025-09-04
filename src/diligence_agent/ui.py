@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 
 from diligence_agent.input_reader import InputReader
-from diligence_agent.crew import default_model, default_temperature
+from diligence_agent.crew import default_model, default_temperature, AVAILABLE_MODELS
 
 
 class DueDiligenceUI:
@@ -324,7 +324,7 @@ class DueDiligenceUI:
                     # Model selection dropdown
                     model_dropdown = gr.Dropdown(
                         label="Select Model",
-                        choices=["gpt-4o-mini", "gpt-4.1"],
+                        choices=AVAILABLE_MODELS,
                         value=default_model,  # Use default from crew.py
                         interactive=True
                     )
