@@ -8,6 +8,7 @@ from src.diligence_agent.mcp_config import get_slack_tools
 from crewai.llm import LLM
 
 # Default configuration
+AVAILABLE_MODELS = ["gpt-4o-mini", "gpt-4.1"]
 default_model = "gpt-4o-mini"
 default_temperature = 0.1
 async_execution = True
@@ -35,7 +36,7 @@ class DiligenceAgent():
             verbose=True,
             llm=self.llm,
             tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()] + get_slack_tools(),
-            max_iter=3,
+            max_iter=8,
             max_retry_limit=1
         )
 
@@ -198,8 +199,10 @@ class DiligenceAgent():
         """Creates the DiligenceAgent crew with async parallel execution"""
 
         return Crew(
-            agents=self.agents,
-            tasks=self.tasks,
+            #agents=self.agents,
+            #tasks=self.tasks,
+            agents=[self.data_organizer()],
+            tasks=[self.data_organizer_task()],
             process=Process.sequential,
             verbose=True
         )

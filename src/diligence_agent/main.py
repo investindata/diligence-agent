@@ -12,16 +12,16 @@ from datetime import datetime
 import time
 import json
 
-from diligence_agent.crew import DiligenceAgent
+from diligence_agent.crew import DiligenceAgent, AVAILABLE_MODELS
 from diligence_agent.input_reader import InputReader
 from diligence_agent.generate_tasks_yaml import generate_tasks_yaml
 
-# from opik.integrations.crewai import track_crewai
+from opik.integrations.crewai import track_crewai
 
 
 # Commented out OPIK tracking - not required for core functionality
 # To enable tracking, uncomment and add OPIK_API_KEY to .env
-# track_crewai(project_name="diligence-agent")
+track_crewai(project_name="diligence-agent")
 
 
 def save_task_outputs(crew, output_path, company_file):
@@ -342,7 +342,7 @@ Examples:
     parser.add_argument('--interactive', '-i', action='store_true',
                        help='Force interactive mode even with arguments')
     parser.add_argument('--model', '-m', type=str, default='gpt-4o-mini',
-                       choices=['gpt-4o-mini', 'gpt-4.1'],
+                       choices=AVAILABLE_MODELS,
                        help='LLM model to use for analysis (default: gpt-4o-mini)')
     parser.add_argument('--temperature', '-t', type=float, default=0.1,
                        help='Temperature for LLM model (0.0-2.0, default: 0.1)')
