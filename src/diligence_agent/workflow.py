@@ -67,45 +67,51 @@ organizer_agent = Agent(
     max_retry_limit=1
 )
 
-google_doc_task = Task(
-    name="Process Google Docs",
-    description=(
+def create_google_doc_task(prev_output: str = "", feedback: str = "") -> Task:
+    """Create a Google Doc processing task with optional feedback"""
+    description = (
         "Process and extract data from Google Docs about company {company_name}.\n"
         "Below is the raw content from the Google Docs:\n\n"
         "{google_docs_content}\n\n"
         "Current date: {current_date}\n"
         "Organize this data into a structured JSON format by category. "
         "Be careless and omit or summarize data beyond reasonable expectations unless told otherwise."
-    ),
-    expected_output="A structured JSON format containing organized company data by category",
-    agent=organizer_agent,
-    output_file="task_outputs/organized_data.json"
-)
+    )
+    if feedback:
+        description += (
+            "Below is your previous output and the feedback received. Please use this to improve your response:\n"
+            "Previous Output:\n{prev_output}\n\n"
+            "Feedback:\n{feedback}\n\n"
+        )
+    return Task(
+        name="Process Google Docs",
+        description=description,
+        expected_output="A structured JSON format containing organized company data by category",
+        agent=organizer_agent,
+        output_file="task_outputs/organized_data.json"
+    )
 
-quality_check_task = Task(
-    name="Quality Check",
-    description=(
-        "Check the output quality of the data organizer against the raw google doc data for company {company_name}. "
-        "If the output is too summarized and is missing valuable information, return it to the organizer for re-processing.\n"
-        "Below is the raw Google Docs data:\n\n"
-        "{google_docs_content}\n\n"
-        "Be extremely thorough and call out any missing details that exist in the raw data but not in the data organizer's output."
-    ),
-    expected_output="Feedback on the data quality and whether it is acceptable or needs re-processing",
-    agent=organizer_agent,
-    output_json=OrganizerFeedback,
-    context=[google_doc_task],
-    output_file="task_outputs/quality_check.json",
-)
+def create_quality_check_task(google_doc_task: Task) -> Task:
+    """Create a quality check task to review the organizer's output"""
+    return Task(
+        name="Quality Check",
+        description=(
+            "Check the output quality of the data organizer against the raw google doc data for company {company_name}. "
+            "If the output is too summarized and is missing valuable information, return it to the organizer for re-processing.\n\n"
+            "Below is the raw Google Docs data:\n\n"
+            "{google_docs_content}\n\n"
+            "Be extremely thorough and call out any missing details that exist in the raw data but not in the data organizer's output."
+        ),
+        expected_output="Feedback on the data quality and whether it is acceptable or needs re-processing",
+        agent=organizer_agent,
+        output_json=OrganizerFeedback,
+        context=[google_doc_task],
+        output_file="task_outputs/quality_check.json",
+    )
 
 
 def run_organizer_workflow(company_file: str = "tensorstax.json"):
-    """
-    Run organizer workflow for a specific company
-    
-    Args:
-        company_file: JSON file containing company sources (e.g., 'tensorstax.json')
-    """
+    """Run organizer workflow for a specific company"""
     # Ensure task_outputs directory exists
     os.makedirs("task_outputs", exist_ok=True)
     
@@ -129,11 +135,48 @@ def run_organizer_workflow(company_file: str = "tensorstax.json"):
         'reference_sources': [s.model_dump() for s in company_data.reference_sources],
     }
     
-    crew = Crew(
-        agents=[organizer_agent],
-        tasks=[google_doc_task, quality_check_task],
-        process=Process.sequential,
-        verbose=True
-    )
-    result = crew.kickoff(inputs=inputs)
+    # Iterative feedback loop
+    max_iterations = 3
+    iteration = 0
+    is_acceptable = False
+    feedback = ""
+    prev_output = ""
+    
+    while not is_acceptable and iteration < max_iterations:
+        iteration += 1
+        print(f"\n🔄 Iteration {iteration}/{max_iterations}")
+        
+        # Update inputs with feedback from previous iteration
+        inputs['feedback'] = feedback
+        inputs['prev_output'] = prev_output
+        
+        # Create tasks for this iteration
+        google_doc_task = create_google_doc_task(prev_output, feedback)
+        quality_check_task = create_quality_check_task(google_doc_task)
+        
+        # Run the crew
+        crew = Crew(
+            agents=[organizer_agent],
+            tasks=[google_doc_task, quality_check_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        result = crew.kickoff(inputs=inputs)
+        
+        # Check if quality is acceptable
+        quality_result = result.tasks_output[1]  # Quality check is second task
+        if hasattr(quality_result, 'json_dict') and quality_result.json_dict:
+            quality_feedback = quality_result.json_dict
+            is_acceptable = quality_feedback.get('is_acceptable', False)
+            if not is_acceptable:
+                feedback = quality_feedback.get('feedback', '')
+                prev_output = result.tasks_output[0].raw if result.tasks_output[0] else ''
+                print(f"❌ Quality check failed. Feedback: {feedback[:100]}...")
+            else:
+                print("✅ Quality check passed!")
+        else:
+            # Fallback if JSON parsing fails
+            print("⚠️ Could not parse quality feedback, stopping iterations")
+            break
+            
     return result
