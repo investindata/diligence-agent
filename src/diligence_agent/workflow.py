@@ -52,6 +52,27 @@ def fetch_google_docs_content(company_data: InputSourcesData):
                 google_docs_content += f"\n\n=== {source.description} ===\nError: Could not fetch document: {e}\n"
     return google_docs_content.strip()
 
+def validate_json_output(output_text: str) -> tuple[bool, str]:
+    """Clean and validate JSON output by removing common LLM formatting"""
+    import json
+    import re
+    
+    # Clean the output by removing markdown code blocks and common LLM formatting
+    cleaned_text = output_text.strip()
+    
+    # Remove ```json and ``` markers
+    cleaned_text = re.sub(r'^```(?:json)?\s*', '', cleaned_text)
+    cleaned_text = re.sub(r'\s*```\s*$', '', cleaned_text)
+    
+    # Remove any other backticks at start/end
+    cleaned_text = cleaned_text.strip('`')
+    
+    try:
+        json.loads(cleaned_text)
+        return True, cleaned_text  # Return the cleaned version
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON format: {str(e)}"
+
 
 class OrganizerFeedback(BaseModel):
     feedback: str = Field(..., description="Feedback on the data quality and completeness")
@@ -75,7 +96,7 @@ def create_google_doc_task(prev_output: str = "", feedback: str = "") -> Task:
         "{google_docs_content}\n\n"
         "Current date: {current_date}\n"
         "Organize this data into a structured JSON format by category. "
-        "Be careless and omit or summarize data beyond reasonable expectations unless told otherwise."
+       # "Be careless and omit or summarize data beyond reasonable expectations unless told otherwise."
     )
     if feedback:
         description += (
@@ -163,20 +184,34 @@ def run_organizer_workflow(company_file: str = "tensorstax.json"):
         )
         result = crew.kickoff(inputs=inputs)
         
-        # Check if quality is acceptable
-        quality_result = result.tasks_output[1]  # Quality check is second task
-        if hasattr(quality_result, 'json_dict') and quality_result.json_dict:
-            quality_feedback = quality_result.json_dict
-            is_acceptable = quality_feedback.get('is_acceptable', False)
-            if not is_acceptable:
-                feedback = quality_feedback.get('feedback', '')
-                prev_output = result.tasks_output[0].raw if result.tasks_output[0] else ''
-                print(f"❌ Quality check failed. Feedback: {feedback[:100]}...")
-            else:
-                print("✅ Quality check passed!")
+        # First, validate and clean JSON output
+        organizer_output = result.tasks_output[0].raw if result.tasks_output[0] else ''
+        is_valid_json, cleaned_output_or_error = validate_json_output(organizer_output)
+        
+        if not is_valid_json:
+            is_acceptable = False
+            feedback = cleaned_output_or_error  # This is the error message
+            prev_output = organizer_output
+            print(f"❌ JSON validation failed: {cleaned_output_or_error}")
         else:
-            # Fallback if JSON parsing fails
-            print("⚠️ Could not parse quality feedback, stopping iterations")
-            break
+            # Write the cleaned JSON to the output file
+            with open("task_outputs/organized_data.json", "w") as f:
+                f.write(cleaned_output_or_error)  # This is the cleaned JSON
+            print("✅ JSON cleaned and validated successfully")
+            # Check quality feedback
+            quality_result = result.tasks_output[1]  # Quality check is second task
+            if hasattr(quality_result, 'json_dict') and quality_result.json_dict:
+                quality_feedback = quality_result.json_dict
+                is_acceptable = quality_feedback.get('is_acceptable', False)
+                if not is_acceptable:
+                    feedback = quality_feedback.get('feedback', '')
+                    prev_output = organizer_output
+                    print(f"❌ Quality check failed. Feedback: {feedback[:100]}...")
+                else:
+                    print("✅ Both JSON validation and quality check passed!")
+            else:
+                # Fallback if JSON parsing fails
+                print("⚠️ Could not parse quality feedback, stopping iterations")
+                break
             
     return result
