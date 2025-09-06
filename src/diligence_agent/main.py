@@ -11,10 +11,12 @@ os.environ['PYTHONWARNINGS'] = 'ignore'
 from datetime import datetime
 import time
 import json
+from pathlib import Path
 
 from diligence_agent.crew import DiligenceAgent
 from diligence_agent.input_reader import InputReader
 from diligence_agent.generate_tasks_yaml import generate_tasks_yaml
+from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 
 # from opik.integrations.crewai import track_crewai
 
@@ -133,6 +135,195 @@ def save_task_outputs(crew, output_path, company_file):
         print(f"Note: Could not save all task outputs: {e}")
         # Don't fail the main process if output saving fails
 
+def add_new_company_interactive():
+    """
+    Interactive prompt for adding a new company through various input methods.
+    Returns the company file name if successful, None otherwise.
+    """
+    print("\n" + "="*60)
+    print("ADD NEW COMPANY")
+    print("="*60)
+    print("\nHow would you like to provide company information?")
+    print("  1. Google Doc URL")
+    print("  2. Local file path")
+    print("  3. Direct text input")
+    print("  4. Cancel")
+    
+    try:
+        choice = input("\nYour choice (1-4): ").strip()
+        
+        if choice == "1":
+            # Google Doc URL
+            url = input("\nEnter Google Doc URL: ").strip()
+            if not url:
+                print("❌ No URL provided")
+                return None
+            
+            # Clean up the URL (remove any trailing parameters or fragments)
+            if "#" in url:
+                url = url.split("#")[0]
+            if "?" in url and "/edit" in url:
+                url = url.split("/edit")[0]
+            
+            print(f"\n📄 Processing Google Doc: {url}")
+            try:
+                processor = GoogleDocProcessor()
+                doc_content = processor._run(url)
+                
+                # Ask for company name
+                company_name = input("\nEnter company name: ").strip()
+                if not company_name:
+                    print("❌ No company name provided")
+                    return None
+                
+                # Save to temporary file for analysis
+                temp_file = f"temp_{company_name.lower().replace(' ', '_')}.json"
+                temp_path = Path("input_sources") / temp_file
+                
+                # Create input sources structure
+                input_data = {
+                    "company_name": company_name,
+                    "company_sources": [
+                        {
+                            "source": "Google Docs",
+                            "identifier": url,
+                            "description": "Company information from Google Doc"
+                        }
+                    ],
+                    "reference_sources": [
+                        {
+                            "source": "Google Docs",
+                            "identifier": url,
+                            "description": doc_content[:500]  # First 500 chars as description
+                        }
+                    ]
+                }
+                
+                # Save to input_sources directory
+                temp_path.parent.mkdir(exist_ok=True)
+                with open(temp_path, 'w') as f:
+                    json.dump(input_data, f, indent=2)
+                
+                print(f"✅ Company '{company_name}' added successfully!")
+                return temp_file
+                
+            except Exception as e:
+                print(f"❌ Error processing Google Doc: {e}")
+                return None
+                
+        elif choice == "2":
+            # Local file path
+            file_path = input("\nEnter file path: ").strip()
+            if not file_path:
+                print("❌ No file path provided")
+                return None
+            
+            try:
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                
+                company_name = input("\nEnter company name: ").strip()
+                if not company_name:
+                    print("❌ No company name provided")
+                    return None
+                
+                # Save to temporary file
+                temp_file = f"temp_{company_name.lower().replace(' ', '_')}.json"
+                temp_path = Path("input_sources") / temp_file
+                
+                input_data = {
+                    "company_name": company_name,
+                    "company_sources": [
+                        {
+                            "source": "PDF" if file_path.endswith('.pdf') else "Webpage",
+                            "identifier": file_path,
+                            "description": "Company information from local file"
+                        }
+                    ],
+                    "reference_sources": [
+                        {
+                            "source": "PDF" if file_path.endswith('.pdf') else "Webpage",
+                            "identifier": file_path,
+                            "description": content[:500]
+                        }
+                    ]
+                }
+                
+                temp_path.parent.mkdir(exist_ok=True)
+                with open(temp_path, 'w') as f:
+                    json.dump(input_data, f, indent=2)
+                
+                print(f"✅ Company '{company_name}' added successfully!")
+                return temp_file
+                
+            except Exception as e:
+                print(f"❌ Error reading file: {e}")
+                return None
+                
+        elif choice == "3":
+            # Direct text input
+            print("\nEnter company information (press Enter twice when done):")
+            lines = []
+            while True:
+                line = input()
+                if line == "" and lines and lines[-1] == "":
+                    break
+                lines.append(line)
+            
+            content = "\n".join(lines[:-1])  # Remove last empty line
+            
+            if not content.strip():
+                print("❌ No content provided")
+                return None
+            
+            company_name = input("\nEnter company name: ").strip()
+            if not company_name:
+                print("❌ No company name provided")
+                return None
+            
+            # Save to temporary file
+            temp_file = f"temp_{company_name.lower().replace(' ', '_')}.json"
+            temp_path = Path("input_sources") / temp_file
+            
+            input_data = {
+                "company_name": company_name,
+                "company_sources": [
+                    {
+                        "source": "Webpage",
+                        "identifier": "Direct input",
+                        "description": "Company information from direct text input"
+                    }
+                ],
+                "reference_sources": [
+                    {
+                        "source": "Webpage",
+                        "identifier": "Direct input",
+                        "description": content[:500]
+                    }
+                ]
+            }
+            
+            temp_path.parent.mkdir(exist_ok=True)
+            with open(temp_path, 'w') as f:
+                json.dump(input_data, f, indent=2)
+            
+            print(f"✅ Company '{company_name}' added successfully!")
+            return temp_file
+            
+        elif choice == "4":
+            print("Cancelled.")
+            return None
+        else:
+            print("❌ Invalid choice. Please enter 1-4.")
+            return None
+            
+    except KeyboardInterrupt:
+        print("\n\nCancelled by user.")
+        return None
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        return None
+
 def get_user_selection(available_companies):
     """
     Interactive menu for selecting companies to analyze.
@@ -150,7 +341,8 @@ def get_user_selection(available_companies):
         print(f"  {i}. {company_name}")
     
     print(f"  {len(company_list) + 1}. All companies")
-    print(f"  {len(company_list) + 2}. Exit")
+    print(f"  {len(company_list) + 2}. Add new company")
+    print(f"  {len(company_list) + 3}. Exit")
     
     while True:
         try:
@@ -172,8 +364,16 @@ def get_user_selection(available_companies):
             if selection == str(len(company_list) + 1):
                 return company_list
             
-            # Check for exit
+            # Check for "add new company" option
             if selection == str(len(company_list) + 2):
+                new_company = add_new_company_interactive()
+                if new_company:
+                    return [new_company]
+                else:
+                    continue
+            
+            # Check for exit
+            if selection == str(len(company_list) + 3):
                 print("Exiting...")
                 sys.exit(0)
             

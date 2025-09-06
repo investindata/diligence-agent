@@ -141,6 +141,7 @@ def generate_tasks_yaml() -> None:
         "    - Data validation results and completeness scores\n"
         "    - All section analyses (overview, product, market, competition, team)\n"
         "    - FOUNDER ASSESSMENT findings (quality rating, founder-market fit score, red flags)\n"
+        "    - CUSTOMER SENTIMENT analysis (social media presence, reviews, brand reputation)\n"
         "    - Identified risks and opportunities\n\n"
         "    Provide a clear investment decision with:\n"
         "    1. EXECUTIVE SUMMARY (2-3 paragraphs)\n"
@@ -148,14 +149,18 @@ def generate_tasks_yaml() -> None:
         "       - Overall founder quality rating (A/B/C)\n"
         "       - Founder-market fit score (1-10)\n"
         "       - Key strengths and concerns about founders\n"
-        "    3. KEY STRENGTHS (bullet points)\n"
-        "    4. KEY RISKS & CONCERNS (bullet points)\n"
-        "    5. INVESTMENT RECOMMENDATION: Clear GO/NO-GO/CONDITIONAL decision\n"
-        "    6. IF GO: Proposed terms (valuation range, investment amount, key terms)\n"
-        "    7. IF NO-GO: Specific reasons and what would need to change\n"
-        "    8. IF CONDITIONAL: Specific conditions that must be met\n"
-        "    9. NEXT STEPS: Concrete action items with owners and timelines\n"
-        "    10. KEY METRICS TO TRACK: Post-investment monitoring metrics\n\n"
+        "    3. CUSTOMER SENTIMENT SUMMARY:\n"
+        "       - Overall sentiment score and trend\n"
+        "       - Key positive and negative themes\n"
+        "       - Brand reputation assessment\n"
+        "    4. KEY STRENGTHS (bullet points)\n"
+        "    5. KEY RISKS & CONCERNS (bullet points)\n"
+        "    6. INVESTMENT RECOMMENDATION: Clear GO/NO-GO/CONDITIONAL decision\n"
+        "    7. IF GO: Proposed terms (valuation range, investment amount, key terms)\n"
+        "    8. IF NO-GO: Specific reasons and what would need to change\n"
+        "    9. IF CONDITIONAL: Specific conditions that must be met\n"
+        "    10. NEXT STEPS: Concrete action items with owners and timelines\n"
+        "    11. KEY METRICS TO TRACK: Post-investment monitoring metrics\n\n"
         "    Be direct and actionable. Include the founder assessment prominently.\n"
         "    The current date for this analysis is {current_date}.\n"
         "  expected_output: >\n"
@@ -171,13 +176,31 @@ def generate_tasks_yaml() -> None:
         "Market": "A comprehensive analysis of the market in which the company operates.",
         "Competitive Landscape": "An overview of the competitive landscape, including key competitors and market positioning.",
         "Team": "A description of the company's team, including key members and their backgrounds.",
+        "Founder Assessment": "A comprehensive assessment of the founders including their background, experience, founder-market fit, and an A/B/C quality rating.",
+        "Customer Sentiment": "An analysis of customer sentiment and social media presence, including reviews, social media discussions, and brand reputation.",
     }
     tasks_str = organizer_task + "\n\n"
     tasks_str += founder_assessment_task + "\n\n"
     tasks_str += report_writer_task.replace("SECTIONS", print_sections(sections)) + "\n\n"
     tasks_str += executive_summary_task + "\n\n"
     for section, descr in sections.items():
-        tasks_str += section.lower().replace(' ', '_') + "_section_writer_task:\n" + create_section_task(section, descr.lower()) + "\n\n"
+        # Special handling for Customer Sentiment to use sentiment_analyst agent
+        if section == "Customer Sentiment":
+            tasks_str += "customer_sentiment_section_writer_task:\n"
+            task_content = (
+                "  description: >\n"
+                "    Analyze customer sentiment and write a detailed Customer Sentiment section for an investment report about the startup company {company_name}.\n"
+                "    This section should provide an analysis of customer sentiment and social media presence, including reviews, social media discussions, and brand reputation.\n"
+                "    Use the SentimentAnalyzer tool to perform actual web searches for reviews, Reddit discussions, Twitter mentions, and Glassdoor ratings.\n"
+                "    The tool will search for real data - not simulated. Be transparent about what data is actually available vs what couldn't be found.\n"
+                "    The current date for this analysis is {current_date}.\n"
+                "  expected_output: >\n"
+                "    A detailed Customer Sentiment section for an investment report about company {company_name} in Markdown format.\n"
+                "  agent: sentiment_analyst"
+            )
+            tasks_str += task_content + "\n\n"
+        else:
+            tasks_str += section.lower().replace(' ', '_') + "_section_writer_task:\n" + create_section_task(section, descr.lower()) + "\n\n"
 
     output_path = Path(__file__).parent / "config/tasks.yaml"
     
