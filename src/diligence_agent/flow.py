@@ -1,11 +1,13 @@
 from pydantic import BaseModel
 from crewai.flow.flow import Flow, listen, start, router, or_
+from crewai.flow.persistence import persist
 from crewai import Agent
 from crewai.llm import LLM
 from pydantic import BaseModel, Field
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.workflow import validate_json_output
+from src.diligence_agent.mcp_config import get_slack_tools
 import asyncio
 import json
 
@@ -20,7 +22,8 @@ import os
 
 llm = LLM(
     model=model,
-    api_key=os.getenv("GOOGLE_API_KEY")
+    api_key=os.getenv("GOOGLE_API_KEY"),
+    temperature=0.0,
 )
 
 class OrganizerFeedback(BaseModel):
@@ -35,25 +38,32 @@ class DiligenceState(BaseModel):
     company_name: str = ""
     current_date: str = ""
     
-    # organizer flow
+    # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
     organizer_iterations: int = 0
-    max_organizer_iterations: int = 4
+    max_organizer_iterations: int = 1
     organizer_feedback: OrganizerFeedback = OrganizerFeedback(feedback="", is_acceptable=False)
     raw_questionnaire_content: str = ""
     clean_questionnaire_content: dict = {}
     raw_slack_content: str = ""
     clean_slack_content: str = ""
 
+    # slack organizer flow
+    slack_channels: list = [{"name": "diligence_tensorstax", "id":"C09AE80U8C8","description": "Dedicated channel for TensorStax due diligence discussions."},
+                            {"name": "q32025", "id": "C09750Z9HQ8", "description": "Channel for group discussions about companies, including TensorStax."},]
+    raw_slack_content: str = ""
+    clean_slack_content: str = ""
+
 organizer_agent = Agent(
     role="Data organizer",
-    goal="Organize unstructured data into a clean json.",
+    goal="Organize unstructured data into a clean format.",
     backstory="You are an excellent data organizer with strong attention to detail.",
     verbose=True,
     llm=llm,
     max_iter=8,
 )
 
+@persist()
 class DiligenceFlow(Flow[DiligenceState]):
 
     @start()
@@ -146,14 +156,68 @@ class DiligenceFlow(Flow[DiligenceState]):
             return "Done"
         else:
             return "Repeat"
+        
     @listen("Done")
-    def finalize_data(self) -> dict:
-        """Final step when data organization is complete"""
-        print("🎉 Data organization completed!")
-        print(f"Final iterations: {self.state.organizer_iterations}")
-        print(f"Final feedback: {self.state.organizer_feedback.feedback}")
-        return self.state.clean_questionnaire_content
-
+    async def retrieve_slack_data(self) -> str:
+        """Fetch Slack content using MCP tools"""
+        all_slack_content = ""
+        slack_tools = get_slack_tools()
+        
+        for channel in self.state.slack_channels:
+            # Add channel header with name and description
+            channel_header = f"\n# Channel: {channel['name']}\n"
+            channel_header += f"Description: {channel['description']}\n"
+            channel_header += f"Channel ID: {channel['id']}\n\n"
+            
+            channel_content = ""
+            
+            if slack_tools:
+                try:
+                    # Find the slack_get_channel_history tool specifically
+                    history_tool = None
+                    for tool in slack_tools:
+                        if hasattr(tool, 'name') and tool.name == 'slack_get_channel_history':
+                            history_tool = tool
+                            break
+                    
+                    if history_tool:
+                        # Use the MCP tool to fetch channel messages with correct parameter format
+                        result = history_tool._run(
+                            channel_id=channel['id'],
+                            limit=500
+                        )
+                        channel_content = f"Messages from {channel['name']}:\n{result}\n"
+                    else:
+                        channel_content = f"slack_get_channel_history tool not found for {channel['name']}\n"
+                        
+                except Exception as e:
+                    channel_content = f"Error fetching data from {channel['name']}: {str(e)}\n"
+            else:
+                channel_content = f"Slack MCP tools not available for {channel['name']}\n"
+            
+            # Concatenate channel info with content
+            all_slack_content += channel_header + channel_content + "\n"
+        
+        self.state.raw_slack_content = all_slack_content
+        return self.state.raw_slack_content
+    
+    @listen(retrieve_slack_data)
+    async def organize_slack_data(self, raw_slack_content: str) -> dict:
+        """Organize Slack data"""
+        query = (
+            f"Process and extract data from Slack channels about company {self.state.company_name}.\n"
+            f"Below is the raw content from Slack:\n\n"
+            f"{raw_slack_content}\n\n"
+            f"Current date: {self.state.current_date}\n"
+            f"Organize this data into a human readable markdown format. Be thorough and include all relevant details about this company.\n"
+        )
+        clean_slack_data = await organizer_agent.kickoff_async(query)    
+        self.state.clean_slack_content = clean_slack_data
+        return clean_slack_data
+    
+    @listen(organize_slack_data)
+    async def generate_keywords(self):
+        print("CURRENT_STATE:", self.state)
 
 
 async def kickoff():
@@ -164,12 +228,47 @@ async def kickoff():
     print("State: ", diligence_flow.state)
     return result
 
+
+async def kickoff_task(task_name: str = "generate_keywords"):
+    """Run a single task of the flow with persistent state."""
+    
+    diligence_flow = DiligenceFlow()
+    
+    # Check if we have a persisted state from a previous run
+    if not diligence_flow.state.company_name:
+        print("Initializing basic state for single task execution...")
+        diligence_flow.state.company_name = "tensorstax"
+        diligence_flow.state.current_date = datetime.now().strftime("%Y-%m-%d")
+    
+    # Get the task method and run it
+    if hasattr(diligence_flow, task_name):
+        task_method = getattr(diligence_flow, task_name)
+        result = await task_method()
+    else:
+        raise ValueError(f"Task '{task_name}' not found in DiligenceFlow")
+    
+    print("Updated State: ", diligence_flow.state)
+    return result
+
+
 def plot():
-    poem_flow = DiligenceFlow()
-    poem_flow.plot("DiligenceFlowPlot")
+    # Ensure task_outputs directory exists
+    os.makedirs("task_outputs", exist_ok=True)
+    
+    diligence_flow = DiligenceFlow()
+    diligence_flow.plot("task_outputs/DiligenceFlowPlot")
 
 if __name__ == "__main__":
-    asyncio.run(kickoff())
+    import sys
+    
+    if len(sys.argv) > 1:
+        # Run specific task if method name is provided
+        task_name = sys.argv[1]
+        asyncio.run(kickoff_task(task_name))
+    else:
+        # Run full flow by default
+        asyncio.run(kickoff())
+    
     plot()
 
 
