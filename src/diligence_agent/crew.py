@@ -4,6 +4,7 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
+from src.diligence_agent.tools.sentiment_analyzer import SentimentAnalyzer
 from crewai.llm import LLM
 
 # Default configuration
@@ -74,6 +75,17 @@ class DiligenceAgent():
             verbose=True,
             llm=self.llm,
             tools=[SerperDevTool(), SerperScrapeWebsiteTool()],
+            max_iter=3,
+            max_retry_limit=1
+        )
+    
+    @agent
+    def sentiment_analyst(self) -> Agent:
+        return Agent(
+            config=self.agents_config['sentiment_analyst'], # type: ignore[index]
+            verbose=True,
+            llm=self.llm,
+            tools=[SentimentAnalyzer(), SerperDevTool(), SerperScrapeWebsiteTool()],
             max_iter=3,
             max_retry_limit=1
         )
@@ -157,6 +169,16 @@ class DiligenceAgent():
         )
     
     @task
+    def customer_sentiment_section_writer_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['customer_sentiment_section_writer_task'], # type: ignore[index]
+            llm=self.llm,
+            context=[self.data_organizer_task()],
+            async_execution=async_execution,
+            output_file="9_customer_sentiment.md"
+        )
+    
+    @task
     def report_writer_task(self) -> Task:
         return Task(
             config=self.tasks_config['report_writer_task'], # type: ignore[index]
@@ -169,8 +191,9 @@ class DiligenceAgent():
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
                 self.founder_assessment_task(),
+                self.customer_sentiment_section_writer_task(),
             ],
-            output_file="9_full_diligence_report.md"
+            output_file="10_full_diligence_report.md"
         )
     
     @task
@@ -187,9 +210,10 @@ class DiligenceAgent():
                 self.competitive_landscape_section_writer_task(),
                 self.team_section_writer_task(),
                 self.founder_assessment_task(),
+                self.customer_sentiment_section_writer_task(),
                 self.report_writer_task(),
             ],
-            output_file="10_executive_summary.md"
+            output_file="11_executive_summary.md"
         )
 
     @crew
