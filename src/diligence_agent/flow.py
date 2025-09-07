@@ -37,6 +37,7 @@ class DiligenceState(BaseModel):
     # general info
     company_name: str = ""
     current_date: str = ""
+    skip_method: bool = False
     
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
@@ -51,8 +52,6 @@ class DiligenceState(BaseModel):
     # slack organizer flow
     slack_channels: list = [{"name": "diligence_tensorstax", "id":"C09AE80U8C8","description": "Dedicated channel for TensorStax due diligence discussions."},
                             {"name": "q32025", "id": "C09750Z9HQ8", "description": "Channel for group discussions about companies, including TensorStax."},]
-    raw_slack_content: str = ""
-    clean_slack_content: str = ""
 
 organizer_agent = Agent(
     role="Data organizer",
@@ -69,6 +68,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     @start()
     def retrieve_questionnaire_data(self) -> str:
         """Fetch Google Docs content upfront to reduce costs and increase reliability"""
+        if self.state.skip_method and self.state.raw_questionnaire_content:
+            return self.state.raw_questionnaire_content
+            
         google_doc_processor = GoogleDocProcessor()
         raw_questionnaire_content = google_doc_processor._run(self.state.questionaire_url).strip()
         self.state.raw_questionnaire_content = raw_questionnaire_content
@@ -77,6 +79,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(or_("retrieve_questionnaire_data", "Repeat"))
     async def organize_questionnaire_data(self) -> dict:
         """Create a Google Doc processing task with optional feedback"""
+        if self.state.skip_method and self.state.clean_questionnaire_content:
+            return self.state.clean_questionnaire_content
+            
         query = (
             f"Process and extract data from Google Docs about company {self.state.company_name}.\n"
             f"Below is the raw content from the Google Docs:\n\n"
@@ -109,6 +114,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     
     @listen(organize_questionnaire_data)
     async def quality_check_organized_data(self, clean_questionnaire_data: dict) -> OrganizerFeedback:
+        if self.state.skip_method and self.state.organizer_feedback.feedback:
+            return self.state.organizer_feedback
+            
         query = (
             f"Check the output quality of the data organizer against the raw google doc data for company {self.state.company_name}. "
             f"If the output is too summarized and is missing valuable information, return it to the organizer for re-processing.\n\n"
@@ -160,6 +168,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen("Done")
     async def retrieve_slack_data(self) -> str:
         """Fetch Slack content using MCP tools"""
+        if self.state.skip_method and self.state.raw_slack_content:
+            return self.state.raw_slack_content
+            
         all_slack_content = ""
         slack_tools = get_slack_tools()
         
@@ -204,6 +215,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(retrieve_slack_data)
     async def organize_slack_data(self, raw_slack_content: str) -> dict:
         """Organize Slack data"""
+        if self.state.skip_method and self.state.clean_slack_content:
+            return self.state.clean_slack_content
+            
         query = (
             f"Process and extract data from Slack channels about company {self.state.company_name}.\n"
             f"Below is the raw content from Slack:\n\n"
@@ -211,7 +225,9 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"Current date: {self.state.current_date}\n"
             f"Organize this data into a human readable markdown format. Be thorough and include all relevant details about this company.\n"
         )
-        clean_slack_data = await organizer_agent.kickoff_async(query)    
+        result = await organizer_agent.kickoff_async(query)
+        # Extract string content from agent result
+        clean_slack_data = result.raw if hasattr(result, 'raw') else str(result)
         self.state.clean_slack_content = clean_slack_data
         return clean_slack_data
     
@@ -223,29 +239,33 @@ class DiligenceFlow(Flow[DiligenceState]):
 async def kickoff():
     diligence_flow = DiligenceFlow()
     result = await diligence_flow.kickoff_async(
-        inputs={"company_name": "tensorstax", "current_date": datetime.now().strftime("%Y-%m-%d")}
+        inputs={"company_name": "tensorstax", "current_date": datetime.now().strftime("%Y-%m-%d"), "skip_method": False}
     )
     print("State: ", diligence_flow.state)
+    print(f"🆔 Flow completed! To run individual tasks, use this ID: {diligence_flow.state.id}")
     return result
 
 
-async def kickoff_task(task_name: str = "generate_keywords"):
+async def kickoff_task(task_name: str = "generate_keywords", flow_id: str = None):
     """Run a single task of the flow with persistent state."""
     
     diligence_flow = DiligenceFlow()
     
-    # Check if we have a persisted state from a previous run
-    if not diligence_flow.state.company_name:
-        print("Initializing basic state for single task execution...")
-        diligence_flow.state.company_name = "tensorstax"
-        diligence_flow.state.current_date = datetime.now().strftime("%Y-%m-%d")
-    
-    # Get the task method and run it
-    if hasattr(diligence_flow, task_name):
-        task_method = getattr(diligence_flow, task_name)
-        result = await task_method()
+    if flow_id:
+        # Load existing flow state using the provided ID
+        result = await diligence_flow.kickoff_async(
+            inputs={
+                "id": flow_id,
+                "company_name": "tensorstax", 
+                "current_date": datetime.now().strftime("%Y-%m-%d"), 
+                "skip_method": True
+            }
+        )
     else:
-        raise ValueError(f"Task '{task_name}' not found in DiligenceFlow")
+        # No flow ID provided, start fresh with skip_method=True
+        result = await diligence_flow.kickoff_async(
+            inputs={"company_name": "tensorstax", "current_date": datetime.now().strftime("%Y-%m-%d"), "skip_method": True}
+        )
     
     print("Updated State: ", diligence_flow.state)
     return result
@@ -264,7 +284,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         # Run specific task if method name is provided
         task_name = sys.argv[1]
-        asyncio.run(kickoff_task(task_name))
+        flow_id = sys.argv[2] if len(sys.argv) > 2 else None
+        asyncio.run(kickoff_task(task_name, flow_id))
     else:
         # Run full flow by default
         asyncio.run(kickoff())
