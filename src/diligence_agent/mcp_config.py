@@ -19,7 +19,6 @@ def get_slack_tools():
             "SLACK_BOT_TOKEN": os.getenv('SLACK_BOT_TOKEN'),
             "SLACK_TEAM_ID": os.getenv('SLACK_TEAM_ID'),
             "SLACK_CHANNEL_IDS": os.getenv('SLACK_CHANNEL_IDS', ''),
-            **os.environ
         }
     )
     
