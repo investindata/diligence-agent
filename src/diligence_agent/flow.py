@@ -9,7 +9,8 @@ from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.schemas import OrganizerFeedback, FounderNames, Founder
 
 from src.diligence_agent.workflow import validate_json_output
-from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools
+from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools_with_auth
+from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 import asyncio
 import json
 from opik.integrations.crewai import track_crewai
@@ -24,7 +25,7 @@ import os
 llm = LLM(
     model=model,
     api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.1,
+    temperature=0.0,
 )
 
 
@@ -59,13 +60,13 @@ organizer_agent = Agent(
 )
 
 researcher_agent = Agent(
-    role="Researcher", 
+    role="Researcher",
     goal="Search and scrape the web for valuable information about a topic using both search engines and browser automation.",
-    backstory="You are an excellent researcher who can search the web using Serper and directly navigate websites using Playwright for thorough information gathering.",
+    backstory="You are an excellent researcher who can search the web using Serper and directly navigate websites using Playwright for thorough information gathering. When LinkedIn requires authentication, you can pause and request manual login.",
     verbose=True,
     llm=llm,
     max_iter=20,
-    tools=[SerperDevTool()] + get_playwright_tools()
+    tools=[SerperDevTool(), SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
 )
 
 @persist(verbose=True)
@@ -254,15 +255,49 @@ class DiligenceFlow(Flow[DiligenceState]):
         else:
             print("result", result)
             raise ValueError(f"Failed to get structured output from researcher agent. Raw result: {result}")
-            
-        
+
+
 
     @listen(get_founders_names)
     async def research_founder(self):
-        query = (
-            f"Research {self.state.founder_names.names[0]} from {self.state.company_name} and produce JSON that validates against this schema. "
-            f"Do NOT include any explanation, thought, or commentary. Only output JSON."
-        )
+        query = f"""
+Perform a thorough web research of founder {self.state.founder_names.names[0]} from company {self.state.company_name}.
+
+Using web search and scraping tools, follow these instructions:
+- Gather as much detail as possible about this founder from reliable public sources
+  (e.g., LinkedIn, Crunchbase, GitHub, news articles, blogs, podcasts, videos).
+- If you encounter LinkedIn pages that require sign-in, use the linkedin_manual_auth tool to pause and request manual authentication before continuing.
+- Fill every available field in the Founder schema.
+- For education and work_experience, include multiple entries with institutions, companies, and roles.
+- For notable_achievements, include awards, successful exits, patents, publications, or other recognitions.
+- For track_record, summarize performance in prior ventures or roles, including outcomes if known.
+- For red_flags, call out potential issues (controversies, failed startups, lawsuits, negative press).
+- If something cannot be found, set it to null or [] instead of leaving vague text.
+- Infer the gender of the founder from sources, so your writing use the appropriate pronouns.
+
+Output:
+- Return ONLY a valid JSON object that matches the Founder schema.
+- Do NOT include any explanation, thought, or commentary. Only output JSON.
+"""
+
+#         query = f"""
+# Perform a thorough web research of founder {self.state.founder_names.names[0]} from company {self.state.company_name}.
+
+# Using web search and scraping tools, follow these instructions:
+# - Gather as much detail as possible about this founder from reliable public sources
+#   (e.g., LinkedIn, Crunchbase, GitHub, news articles, blogs, podcasts, videos).
+# - Fill every available field in the Founder schema.
+# - For education and work_experience, include multiple entries with institutions, companies, and roles.
+# - For notable_achievements, include awards, successful exits, patents, publications, or other recognitions.
+# - For track_record, summarize performance in prior ventures or roles, including outcomes if known.
+# - For red_flags, call out potential issues (controversies, failed startups, lawsuits, negative press).
+# - If something cannot be found, set it to null or [] instead of leaving vague text.
+# - Infer the gender of the founder from sources, so your writing use the appropriate pronoumns.
+
+# Output:
+# - Return ONLY a valid JSON object that matches the Founder schema.
+# - Do NOT include any explanation, thought, or commentary. Only output JSON.
+# """
         result = await researcher_agent.kickoff_async(query, response_format=Founder)
         print("Generate keywords result:", result)
         if result.pydantic:

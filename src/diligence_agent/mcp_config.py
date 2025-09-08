@@ -49,6 +49,49 @@ def get_playwright_tools():
     if headless:
         args.append("--headless")
     
+    # Use persistent profile for LinkedIn authentication
+    user_data_dir = os.path.expanduser("~/.cache/playwright-profile")
+    args.extend(["--user-data-dir", user_data_dir])
+    
+    playwright_config = StdioServerParameters(
+        command="npx",
+        args=args,
+        env={
+            "NODE_ENV": "production",
+            "LINKEDIN_EMAIL": os.getenv('LINKEDIN_EMAIL', ''),
+            "LINKEDIN_PASSWORD": os.getenv('LINKEDIN_PASSWORD', ''),
+            **os.environ
+        }
+    )
+    
+    try:
+        adapter = MCPServerAdapter(playwright_config, connect_timeout=60)
+        return list(adapter.tools)
+    except Exception as e:
+        print(f"Warning: Playwright MCP not available: {e}")
+        return []
+
+
+def get_playwright_tools_with_auth():
+    """Get Playwright MCP tools with LinkedIn authentication support."""
+    # Alternative approach using storage state for authentication
+    headless = os.getenv('PLAYWRIGHT_HEADLESS', 'false').lower() == 'true'
+    
+    args = [
+        "@playwright/mcp@latest",
+        "--browser", "chrome",
+        "--timeout-navigation", "30000",
+        "--timeout-action", "10000",
+    ]
+    
+    if headless:
+        args.append("--headless")
+    
+    # Use storage state file for persistent login
+    storage_state_path = os.path.expanduser("~/.cache/linkedin-auth.json")
+    if os.path.exists(storage_state_path):
+        args.extend(["--storage-state", storage_state_path])
+    
     playwright_config = StdioServerParameters(
         command="npx",
         args=args,
