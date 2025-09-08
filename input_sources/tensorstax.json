@@ -5,6 +5,16 @@
       "source": "Google Docs",
       "identifier": "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing",
       "description": "Company questionnaire filled out by the founders"
+    },
+    {
+      "source": "Slack",
+      "identifier": "C09AE80U8C8", 
+      "description": "diligence_tensorstax: Dedicated channel for TensorStax due diligence discussions"
+    },
+    {
+      "source": "Slack",
+      "identifier": "C09750Z9HQ8", 
+      "description": "q3_2025: Channel for group discussions about companies, including TensorStax"
     }
   ],
   "reference_sources": [

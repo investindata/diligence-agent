@@ -4,9 +4,11 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
+from src.diligence_agent.mcp_config import get_slack_tools
 from crewai.llm import LLM
 
 # Default configuration
+AVAILABLE_MODELS = ["gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"]
 default_model = "gpt-4o-mini"
 default_temperature = 0.1
 async_execution = True
@@ -33,8 +35,8 @@ class DiligenceAgent():
             config=self.agents_config['data_organizer'], # type: ignore[index]
             verbose=True,
             llm=self.llm,
-            tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()],
-            max_iter=3,
+            tools=[GoogleDocProcessor(), SerperDevTool(), SerperScrapeWebsiteTool()] + get_slack_tools(),
+            max_iter=8,
             max_retry_limit=1
         )
 
