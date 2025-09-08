@@ -199,10 +199,8 @@ class DiligenceAgent():
         """Creates the DiligenceAgent crew with async parallel execution"""
 
         return Crew(
-            #agents=self.agents,
-            #tasks=self.tasks,
-            agents=[self.data_organizer()],
-            tasks=[self.data_organizer_task()],
+            agents=self.agents,
+            tasks=self.tasks,
             process=Process.sequential,
             verbose=True
         )
