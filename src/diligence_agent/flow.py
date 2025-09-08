@@ -1,16 +1,17 @@
 from pydantic import BaseModel
 from crewai.flow.flow import Flow, listen, start, router, or_
 from crewai.flow.persistence import persist
+from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from crewai import Agent
 from crewai.llm import LLM
 from pydantic import BaseModel, Field
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
+
 from src.diligence_agent.workflow import validate_json_output
 from src.diligence_agent.mcp_config import get_slack_tools
 import asyncio
 import json
-
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
 
@@ -60,6 +61,16 @@ organizer_agent = Agent(
     verbose=True,
     llm=llm,
     max_iter=8,
+)
+
+researcher_agent = Agent(
+    role="Researcher",
+    goal="Search the web for valuable information about a topic.",
+    backstory="You are an excellent researcher, who can search and browse the web to find thorough information about any topic.",
+    verbose=True,
+    llm=llm,
+    max_iter=8,
+    tools=[SerperDevTool()]
 )
 
 @persist()
@@ -233,7 +244,34 @@ class DiligenceFlow(Flow[DiligenceState]):
     
     @listen(organize_slack_data)
     async def generate_keywords(self):
-        print("CURRENT_STATE:", self.state)
+        query = (
+            f"Provide a list of 6 search terms that could be relevant in researching the background of the founders of company {self.state.company_name}.\n\n"
+            f"To support your work, you have access to the following information about {self.state.company_name}:\n\n"
+            f"{self.state.clean_questionnaire_content}\n\n"
+            f"{self.state.clean_slack_content}\n\n"
+            f"You also have the ability to search the web to verify who the founders are or gather any additional information."
+        )
+        query = (
+            f"Perform a thorough research on the background of the founders of company {self.state.company_name} by following these steps:\n\n"
+            f"1. Search the web to confirm who the founders are.\n\n"
+            f"2. List 6 search terms that would help evaluate their background, their trustworthiness, and potential as startup executives.\n\n"
+            f"3. Perform searches for each of these terms, then compile a list of the top 10 most relevant websites.\n\n"
+            f"To support your research, you have access to the following information:\n\n"
+            f"{self.state.clean_questionnaire_content}\n\n"
+            f"{self.state.clean_slack_content}\n\n"
+        )
+        query = (
+            f"Provide detailed plan for researching the background of the founders of company {self.state.company_name} "
+            f"and understand their ability to lead a company successfully in this space. "
+            f"This plan will be used by investors to conduct a thorough online web research on whether to invest in this company. "
+            f"To support your work, you have access to the following information about {self.state.company_name}:\n\n"
+            f"{self.state.clean_questionnaire_content}\n\n"
+            f"{self.state.clean_slack_content}\n\n"
+            f"You also have the ability to search the web to verify who the founders are or gather any additional information."
+        )
+        result = await researcher_agent.kickoff_async(query)
+        print("Generate keywords result:", result)
+        return result.raw
 
 
 async def kickoff():
