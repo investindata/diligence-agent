@@ -1,6 +1,11 @@
 from typing import List, Optional, Annotated
 from pydantic import BaseModel, HttpUrl, Field
 
+class WorkExperience(BaseModel):
+    company: str = Field(..., description="Company name")
+    role: Optional[str] = Field(None, description="Role/position held")
+    years: Optional[str] = Field(None, description="Time period (e.g., '2020-2023' or 'Present')")
+
 
 class OrganizerFeedback(BaseModel):
     feedback: str = Field(..., description="Feedback on the data quality and completeness")
@@ -17,7 +22,7 @@ class Founder(BaseModel):
     role: Annotated[Optional[str], Field(description="Current role/title in the startup")] = None
     background: Annotated[Optional[str], Field(description="Narrative background summary")] = None
     education: Annotated[Optional[List[str]], Field(description="Education history")] = None
-    work_experience: Annotated[Optional[List[str]], Field(description="Notable work experience")] = None
+    work_experience: Annotated[Optional[List[WorkExperience]], Field(description="Notable work experience")] = None
     notable_achievements: Annotated[Optional[List[str]], Field(description="Key achievements, awards, or exits")] = None
     track_record: Annotated[Optional[str], Field(description="Track record in prior ventures or roles")] = None
     red_flags: Annotated[Optional[List[str]], Field(description="Potential concerns or risks related to this founder")] = None

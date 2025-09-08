@@ -19,6 +19,7 @@ track_crewai(project_name="diligence-agent")
 
 #model = "gpt-4o-mini"
 #model = "gpt-4.1-mini"
+#model = "gemini/gemini-1.5-flash"
 model = "gemini/gemini-2.0-flash"
 #model = "gemini/gemini-2.5-flash"
 
@@ -37,6 +38,7 @@ class DiligenceState(BaseModel):
     current_date: str = ""
     skip_method: bool = False
     founder_names: FounderNames = FounderNames(names=[])
+    founder_websites: str = ""
 
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
@@ -67,8 +69,18 @@ researcher_agent = Agent(
     backstory="You are an excellent researcher who can search the web using Serper and directly navigate websites using Playwright for thorough information gathering. When LinkedIn requires authentication, you can pause and request manual login.",
     verbose=True,
     llm=llm,
-    max_iter=20,
+    max_iter=10,
     tools=[SerperDevTool(), SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
+)
+
+research_helper_agent = Agent(
+    role="Research Helper",
+    goal="Search the web and retrieve the most relevant results for the task at hand.",
+    backstory="You are an excellent researcher who can search the web using Serper to search the web.",
+    verbose=True,
+    llm=llm,
+    max_iter=10,
+    tools=[SerperDevTool()]
 )
 
 @persist(verbose=True)
@@ -253,48 +265,45 @@ class DiligenceFlow(Flow[DiligenceState]):
         print("Founder names:", self.state.founder_names)
         return self.state.founder_names
 
-
-
     @listen(get_founders_names)
+    async def research_helper(self, founder_names):
+        # Generate schema description programmatically
+        if self.state.skip_method and self.state.founder_websites:
+            return self.state.founder_websites
+        schema_fields = []
+        for field_name, field_info in Founder.model_fields.items():
+            description = field_info.description or "No description available"
+            schema_fields.append(f"- {field_name}: {description}")
+
+        schema_description = "\n".join(schema_fields)
+
+        query = (
+            f"Create a list of the 10 most relevant websites to support a web research on founder {founder_names.names[0]} from company {self.state.company_name}.\n\n"
+            f"The websites should be a comprehensive collection covering the following topics needed in the research:\n"
+            f"{schema_description}\n\n"
+            f"Follow these steps:\n\n"
+            f"1. Come up with a list of 5 relevant search terms.\n\n"
+            f"2. Perform a search for each term.\n\n"
+            f"3. Compile a list of the top 10 websites that will help gather information for all these data points."
+        )
+        result = await research_helper_agent.kickoff_async(query)
+        self.state.founder_websites = result.raw
+        print("Websites:", self.state.founder_websites)
+        return self.state.founder_websites
+
+
+
+    @listen(research_helper)
     async def research_founder(self):
-        query = f"""
-Perform a thorough web research of founder {self.state.founder_names.names[0]} from company {self.state.company_name}.
+        query = (
+            f"Perform a thorough web research of founder {self.state.founder_names.names[0]} from company {self.state.company_name}.\n\n"
+            f"You are given a list of relevant wesbites below:\n\n"
+            f"{self.state.founder_websites}"
+            f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema."
+            f"- Return ONLY a valid JSON object that matches the Founder schema.\n"
+            f"- Do NOT include any explanation, thought, or commentary. Only output JSON."
+        )
 
-Using web search and scraping tools, follow these instructions:
-- Gather as much detail as possible about this founder from reliable public sources
-  (e.g., LinkedIn, Crunchbase, GitHub, news articles, blogs, podcasts, videos).
-- If you encounter LinkedIn pages that require sign-in, use the linkedin_manual_auth tool to pause and request manual authentication before continuing.
-- Fill every available field in the Founder schema.
-- For education and work_experience, include multiple entries with institutions, companies, and roles.
-- For notable_achievements, include awards, successful exits, patents, publications, or other recognitions.
-- For track_record, summarize performance in prior ventures or roles, including outcomes if known.
-- For red_flags, call out potential issues (controversies, failed startups, lawsuits, negative press).
-- If something cannot be found, set it to null or [] instead of leaving vague text.
-- Infer the gender of the founder from sources, so your writing use the appropriate pronouns.
-
-Output:
-- Return ONLY a valid JSON object that matches the Founder schema.
-- Do NOT include any explanation, thought, or commentary. Only output JSON.
-"""
-
-#         query = f"""
-# Perform a thorough web research of founder {self.state.founder_names.names[0]} from company {self.state.company_name}.
-
-# Using web search and scraping tools, follow these instructions:
-# - Gather as much detail as possible about this founder from reliable public sources
-#   (e.g., LinkedIn, Crunchbase, GitHub, news articles, blogs, podcasts, videos).
-# - Fill every available field in the Founder schema.
-# - For education and work_experience, include multiple entries with institutions, companies, and roles.
-# - For notable_achievements, include awards, successful exits, patents, publications, or other recognitions.
-# - For track_record, summarize performance in prior ventures or roles, including outcomes if known.
-# - For red_flags, call out potential issues (controversies, failed startups, lawsuits, negative press).
-# - If something cannot be found, set it to null or [] instead of leaving vague text.
-# - Infer the gender of the founder from sources, so your writing use the appropriate pronoumns.
-
-# Output:
-# - Return ONLY a valid JSON object that matches the Founder schema.
-# - Do NOT include any explanation, thought, or commentary. Only output JSON.
-# """
         result = await researcher_agent.kickoff_async(query, response_format=Founder)
         founder_info = extract_structured_output(result, Founder)
         print("Founder info:", founder_info)
