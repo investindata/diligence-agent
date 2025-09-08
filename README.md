@@ -187,6 +187,35 @@ SLACK_CHANNEL_IDS=C1234567890,C0987654321  # Optional: comma-separated channel I
 ### 4. Agents with Slack Access
 Currently the `data_organizer` agent has Slack tools enabled for enhanced data gathering.
 
+### 5. Adding Bot to New Channels
+
+For each new company analysis with a dedicated Slack channel:
+
+#### Public Channels
+1. **Create the channel**: `#dd-company-name` (recommended naming convention)
+2. **Add the bot to the channel**:
+   - In the channel, type: `/invite @your-bot-name`
+   - Or go to: Channel Settings → Members → Add Apps → Select your bot
+3. **Get the channel ID** (if needed for `SLACK_CHANNEL_IDS`):
+   - Right-click channel name → Copy Link
+   - Channel ID is the part after `/channels/` (starts with `C`)
+
+#### Private Channels
+1. **Create the private channel**
+2. **Add the bot as a member**:
+   - Channel Settings → Members → Add Apps → Select your bot
+   - You may need admin permissions for private channels
+3. **Verify bot permissions**: Ensure bot has `groups:read` and `groups:history` scopes
+
+#### Verify Setup
+Test the bot can access the channel:
+```bash
+# The bot should be able to read messages from the new channel
+./diligence company-name
+```
+
+**Note**: The bot will automatically have access to all channels it's added to. You only need to update `SLACK_CHANNEL_IDS` if you want to restrict the bot to specific channels.
+
 ## Architecture
 
 ### AI Agents
