@@ -284,7 +284,7 @@ async def kickoff():
     return result
 
 
-async def kickoff_task(task_name: str = "generate_keywords", flow_id: str = None):
+async def kickoff_task(flow_id: str = None):
     """Run a single task of the flow with persistent state."""
     
     diligence_flow = DiligenceFlow()
@@ -292,12 +292,7 @@ async def kickoff_task(task_name: str = "generate_keywords", flow_id: str = None
     if flow_id:
         # Load existing flow state using the provided ID
         result = await diligence_flow.kickoff_async(
-            inputs={
-                "id": flow_id,
-                "company_name": "tensorstax", 
-                "current_date": datetime.now().strftime("%Y-%m-%d"), 
-                "skip_method": True
-            }
+            inputs={"id": flow_id, "skip_method": True}
         )
     else:
         # No flow ID provided, start fresh with skip_method=True
@@ -320,10 +315,9 @@ if __name__ == "__main__":
     import sys
     
     if len(sys.argv) > 1:
-        # Run specific task if method name is provided
-        task_name = sys.argv[1]
-        flow_id = sys.argv[2] if len(sys.argv) > 2 else None
-        asyncio.run(kickoff_task(task_name, flow_id))
+        # Run with flow ID if provided
+        flow_id = sys.argv[1]
+        asyncio.run(kickoff_task(flow_id))
     else:
         # Run full flow by default
         asyncio.run(kickoff())
