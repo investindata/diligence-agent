@@ -9,6 +9,7 @@ from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.schemas import OrganizerFeedback, FounderNames, Founder
 
 from src.diligence_agent.workflow import validate_json_output
+from src.diligence_agent.output_formatter import extract_structured_output
 from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools_with_auth
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 import asyncio
@@ -19,6 +20,7 @@ track_crewai(project_name="diligence-agent")
 #model = "gpt-4o-mini"
 #model = "gpt-4.1-mini"
 model = "gemini/gemini-2.0-flash"
+#model = "gemini/gemini-2.5-flash"
 
 import os
 
@@ -247,14 +249,9 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"Do NOT include any explanation, thought, or commentary. Only output JSON."
         )
         result = await researcher_agent.kickoff_async(query, response_format=FounderNames)
-        if result.pydantic:
-            self.state.founder_names = result.pydantic
-            print("result", result)
-            print("Founder names:", self.state.founder_names)
-            return self.state.founder_names
-        else:
-            print("result", result)
-            raise ValueError(f"Failed to get structured output from researcher agent. Raw result: {result}")
+        self.state.founder_names = extract_structured_output(result, FounderNames)
+        print("Founder names:", self.state.founder_names)
+        return self.state.founder_names
 
 
 
@@ -299,15 +296,9 @@ Output:
 # - Do NOT include any explanation, thought, or commentary. Only output JSON.
 # """
         result = await researcher_agent.kickoff_async(query, response_format=Founder)
-        print("Generate keywords result:", result)
-        if result.pydantic:
-            founder_info = result.pydantic
-            print("result", result)
-            print("Founder info:", founder_info)
-            return founder_info
-        else:
-            print("result", result)
-            raise ValueError(f"Failed to get structured output from researcher agent. Raw result: {result}")
+        founder_info = extract_structured_output(result, Founder)
+        print("Founder info:", founder_info)
+        return founder_info
 
 
 async def kickoff():
