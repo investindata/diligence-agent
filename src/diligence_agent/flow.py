@@ -4,11 +4,9 @@ from crewai.flow.persistence import persist
 from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from crewai import Agent
 from crewai.llm import LLM
-from pydantic import BaseModel, Field
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
-from typing import List
-from src.diligence_agent.schemas import OrganizerFeedback, OrganizedData, FounderNames
+from src.diligence_agent.schemas import OrganizerFeedback, FounderNames, Founder
 
 from src.diligence_agent.workflow import validate_json_output
 from src.diligence_agent.mcp_config import get_slack_tools
@@ -66,8 +64,8 @@ researcher_agent = Agent(
     backstory="You are an excellent researcher, who can search and browse the web to find thorough information about any topic.",
     verbose=True,
     llm=llm,
-    max_iter=8,
-    tools=[SerperDevTool()]
+    max_iter=20,
+    tools=[SerperDevTool(), SerperScrapeWebsiteTool()]
 )
 
 @persist(verbose=True)
@@ -221,7 +219,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.raw_slack_content
 
     @listen(retrieve_slack_data)
-    async def organize_slack_data(self, raw_slack_content: str) -> dict:
+    async def organize_slack_data(self, raw_slack_content: str) -> str:
         """Organize Slack data"""
         if self.state.skip_method and self.state.clean_slack_content:
             return self.state.clean_slack_content
@@ -241,56 +239,40 @@ class DiligenceFlow(Flow[DiligenceState]):
 
     @listen(organize_slack_data)
     async def get_founders_names(self):
+        if self.state.skip_method and self.state.founder_names:
+            return self.state.founder_names
         query = (
             f"Search the web for the names of the founders of company {self.state.company_name}. "
-            #f"Return ONLY valid JSON that matches the following schema: "
-            #f'{{"names": ["string"]}} '
-            #f"Do NOT include any explanation, thought, or commentary. Only output JSON."
+            f"Do NOT include any explanation, thought, or commentary. Only output JSON."
         )
         result = await researcher_agent.kickoff_async(query, response_format=FounderNames)
         if result.pydantic:
-            founder_names = result.pydantic
-            self.state.founder_names = founder_names
+            self.state.founder_names = result.pydantic
             print("result", result)
-            print("Founder names:", founder_names)
-            return founder_names
+            print("Founder names:", self.state.founder_names)
+            return self.state.founder_names
         else:
             print("result", result)
             raise ValueError(f"Failed to get structured output from researcher agent. Raw result: {result}")
+            
         
 
-
-
-    # @listen(get_founders_names)
-    # async def generate_keywords(self):
-    #     query = (
-    #         f"Provide a list of 6 search terms that could be relevant in researching the background of the founders of company {self.state.company_name}.\n\n"
-    #         f"To support your work, you have access to the following information about {self.state.company_name}:\n\n"
-    #         f"{self.state.clean_questionnaire_content}\n\n"
-    #         f"{self.state.clean_slack_content}\n\n"
-    #         f"You also have the ability to search the web to verify who the founders are or gather any additional information."
-    #     )
-    #     query = (
-    #         f"Perform a thorough research on the background of the founders of company {self.state.company_name} by following these steps:\n\n"
-    #         f"1. Search the web to confirm who the founders are.\n\n"
-    #         f"2. List 6 search terms that would help evaluate their background, their trustworthiness, and potential as startup executives.\n\n"
-    #         f"3. Perform searches for each of these terms, then compile a list of the top 10 most relevant websites.\n\n"
-    #         f"To support your research, you have access to the following information:\n\n"
-    #         f"{self.state.clean_questionnaire_content}\n\n"
-    #         f"{self.state.clean_slack_content}\n\n"
-    #     )
-    #     query = (
-    #         f"Provide detailed plan for researching the background of the founders of company {self.state.company_name} "
-    #         f"and understand their ability to lead a company successfully in this space. "
-    #         f"This plan will be used by investors to conduct a thorough online web research on whether to invest in this company. "
-    #         f"To support your work, you have access to the following information about {self.state.company_name}:\n\n"
-    #         f"{self.state.clean_questionnaire_content}\n\n"
-    #         f"{self.state.clean_slack_content}\n\n"
-    #         f"You also have the ability to search the web to verify who the founders are or gather any additional information."
-    #     )
-    #     result = await researcher_agent.kickoff_async(query)
-    #     print("Generate keywords result:", result)
-    #     return result.raw
+    @listen(get_founders_names)
+    async def research_founder(self):
+        query = (
+            f"Research {self.state.founder_names.names[0]} from {self.state.company_name} and produce JSON that validates against this schema. "
+            f"Do NOT include any explanation, thought, or commentary. Only output JSON."
+        )
+        result = await researcher_agent.kickoff_async(query, response_format=Founder)
+        print("Generate keywords result:", result)
+        if result.pydantic:
+            founder_info = result.pydantic
+            print("result", result)
+            print("Founder info:", founder_info)
+            return founder_info
+        else:
+            print("result", result)
+            raise ValueError(f"Failed to get structured output from researcher agent. Raw result: {result}")
 
 
 async def kickoff():
