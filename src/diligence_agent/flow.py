@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from crewai.flow.flow import Flow, listen, start, router, or_
 from crewai.flow.persistence import persist
-from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
+from crewai_tools import SerperDevTool
 from crewai import Agent
 from crewai.llm import LLM
 from datetime import datetime
@@ -9,7 +9,7 @@ from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.schemas import OrganizerFeedback, FounderNames, Founder
 
 from src.diligence_agent.workflow import validate_json_output
-from src.diligence_agent.mcp_config import get_slack_tools
+from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools
 import asyncio
 import json
 from opik.integrations.crewai import track_crewai
@@ -59,13 +59,13 @@ organizer_agent = Agent(
 )
 
 researcher_agent = Agent(
-    role="Researcher",
-    goal="Search the web for valuable information about a topic.",
-    backstory="You are an excellent researcher, who can search and browse the web to find thorough information about any topic.",
+    role="Researcher", 
+    goal="Search and scrape the web for valuable information about a topic using both search engines and browser automation.",
+    backstory="You are an excellent researcher who can search the web using Serper and directly navigate websites using Playwright for thorough information gathering.",
     verbose=True,
     llm=llm,
     max_iter=20,
-    tools=[SerperDevTool(), SerperScrapeWebsiteTool()]
+    tools=[SerperDevTool()] + get_playwright_tools()
 )
 
 @persist(verbose=True)
