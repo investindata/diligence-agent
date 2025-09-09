@@ -8,12 +8,11 @@ from crewai.llm import LLM
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.schemas import OrganizerFeedback, FounderNames, Founder
-from src.diligence_agent.output_formatter import extract_structured_output
 from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools_with_auth
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 import asyncio
 from src.diligence_agent.research_flow import ResearchFlow, ResearchState
-from src.diligence_agent.schemas import Founder
+from src.diligence_agent.utils import execute_coroutines, extract_structured_output, make_json_serializable
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
 
@@ -40,6 +39,7 @@ class DiligenceState(BaseModel):
     company_name: str = ""
     current_date: str = ""
     skip_method: bool = False
+    parallel_execution: bool = False  # Toggle for parallel vs sequential execution
     founder_names: FounderNames = FounderNames(names=[])
     founder_websites: str = ""
     founder_profiles: list[dict] = []
@@ -248,13 +248,11 @@ class DiligenceFlow(Flow[DiligenceState]):
 
     @listen(get_founders_names)
     async def run_research_flows(self):
-        # Run subflows in parallel
-        subflows = []
-
-        # Founders flow
+        # Create coroutines for all founder research tasks
+        coroutines = []
         for name in self.state.founder_names.names:
             subflow = ResearchFlow()
-            subflows.append(subflow.kickoff_async(
+            coroutines.append(subflow.kickoff_async(
                 inputs={
                     "founder": name,
                     "company": self.state.company_name,
@@ -262,19 +260,15 @@ class DiligenceFlow(Flow[DiligenceState]):
                 }
             ))
 
-        results = await asyncio.gather(*subflows)
+        # Execute using our central utility function
+        results = await execute_coroutines(coroutines, parallel=self.state.parallel_execution)
         
-        # Collect founder profiles from subflow results and convert to dictionaries for JSON serialization
+        # Collect founder profiles from subflow results and make them JSON serializable
         self.state.founder_profiles = []
         for result in results:
-            if hasattr(result, 'model_dump'):
-                # Convert Pydantic object to dict
-                self.state.founder_profiles.append(result.model_dump())
-            elif isinstance(result, dict):
-                self.state.founder_profiles.append(result)
-            else:
-                # Fallback for other types
-                self.state.founder_profiles.append(str(result))
+            # Use utility function to handle all JSON serialization including HttpUrl
+            serialized_result = make_json_serializable(result)
+            self.state.founder_profiles.append(serialized_result)
         
         print("Founder profiles:", self.state.founder_profiles)
         return self.state.founder_profiles
@@ -325,10 +319,15 @@ class DiligenceFlow(Flow[DiligenceState]):
 
 
 
-async def kickoff():
+async def kickoff(parallel_execution: bool = True):
     diligence_flow = DiligenceFlow()
     result = await diligence_flow.kickoff_async(
-        inputs={"company_name": "tensorstax", "current_date": datetime.now().strftime("%Y-%m-%d"), "skip_method": False}
+        inputs={
+            "company_name": "tensorstax", 
+            "current_date": datetime.now().strftime("%Y-%m-%d"), 
+            "skip_method": False,
+            "parallel_execution": parallel_execution
+        }
     )
     print(f"🆔 Flow completed! To run individual tasks, use this ID: {diligence_flow.state.id}")
     return result

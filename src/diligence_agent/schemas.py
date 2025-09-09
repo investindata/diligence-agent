@@ -1,14 +1,5 @@
-from typing import List, Optional, Annotated, Type
+from typing import List, Optional, Annotated
 from pydantic import BaseModel, HttpUrl, Field
-
-
-def get_schema_description(schema_class: Type[BaseModel]) -> str:
-    """Generate a formatted description of a Pydantic schema's fields."""
-    schema_fields = []
-    for field_name, field_info in schema_class.model_fields.items():
-        description = field_info.description or "No description available"
-        schema_fields.append(f"- {field_name}: {description}")
-    return "\n".join(schema_fields)
 
 
 class WorkExperience(BaseModel):
