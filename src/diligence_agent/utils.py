@@ -15,11 +15,11 @@ from pydantic import BaseModel
 
 async def execute_coroutines(coroutines: List[Coroutine], parallel: bool = True) -> List[Any]:
     """
-    Execute a list of coroutines either in parallel or sequentially.
+    Execute a list of coroutines either in parallel or sequentially with unified tracing.
     
-    This function maintains trace context properly for both execution modes:
+    This function ensures all executions appear under the same trace hierarchy:
     - Parallel: Uses asyncio.gather() which preserves context via contextvars
-    - Sequential: Executes in current context naturally with unified tracing
+    - Sequential: Executes with explicit trace context propagation for unified Opik tracing
     
     Args:
         coroutines: List of coroutines to execute
@@ -30,14 +30,18 @@ async def execute_coroutines(coroutines: List[Coroutine], parallel: bool = True)
     """
     if parallel:
         # asyncio.gather automatically propagates context to each coroutine
-        # All traces will appear under the same parent span
         return await asyncio.gather(*coroutines)
     else:
-        # Sequential execution with explicit context propagation for unified tracing
+        # Sequential execution with unified tracing context
         results = []
-        for coro in coroutines:
+        
+        # Sequential execution with standard async context propagation
+        # Context variables and asyncio naturally propagate context in sequential execution
+        for i, coro in enumerate(coroutines):
+            print(f"Executing SubFlow {i+1} sequentially...")
             result = await coro
             results.append(result)
+        
         return results
 
 

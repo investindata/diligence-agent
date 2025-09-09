@@ -5,7 +5,7 @@ from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
-from src.diligence_agent.schemas import Founder
+from src.diligence_agent.schemas import Founder, CompetitiveLandscape
 from src.diligence_agent.utils import extract_structured_output, get_schema_description, get_shared_playwright_tools
 
 import os
@@ -14,9 +14,9 @@ def get_schema_for_section(section: str):
     """Get schema class for dynamic schema selection without global state."""
     schema_mapping = {
         "Founders": Founder,
-        # Add other schemas here as needed
+        "Competitive Landscape": CompetitiveLandscape,
     }
-    return schema_mapping.get(section, Founder)  # Default to Founder if section not found
+    return schema_mapping.get(section)  
 
 
 # Define LLM
@@ -39,21 +39,19 @@ search_agent = Agent(
 scraper_agent = Agent(
     role="Web Scraper Researcher",
     goal="Scrape the web for valuable information about a topic using both search engines and browser automation.",
-    backstory="You are an excellent researcher who can navigate websites using Playwright for thorough information gathering. When LinkedIn requires authentication, you can pause and request manual login.",
+    backstory="You are an excellent researcher who can navigate websites using Playwright for thorough information gathering.",
     verbose=True,
     llm=llm,
     max_iter=25,
     #tools=[SimpleLinkedInAuthTool()] + get_shared_playwright_tools()
-    tools=[SimpleLinkedInAuthTool(), SerperScrapeWebsiteTool()]
+    tools=[SerperScrapeWebsiteTool()]
 )
 
 class ResearchState(BaseModel):
-    company: str = ""
-    founder: str = ""
     section: str = ""
-    current_date: str = ""
-    num_search_terms: int = 1
-    num_websites: int = 1
+    section_instruction: str = ""
+    num_search_terms: int = 5
+    num_websites: int = 10
 
 @persist(verbose=True)
 class ResearchFlow(Flow[ResearchState]):
@@ -65,7 +63,6 @@ class ResearchFlow(Flow[ResearchState]):
         schema_description = get_schema_description(schema_class)
 
         query = (
-            f"Perform a thorough web research of founder {self.state.founder} from company {self.state.company}.\n\n"
             f"Your goal is to list {self.state.num_websites} websites that provide comprehensive information on the following topics:\n\n"
             f"{schema_description}\n\n"
             f"To do so, follow these steps:\n\n"
@@ -73,6 +70,7 @@ class ResearchFlow(Flow[ResearchState]):
             f"2. Perform a search for each term.\n\n"
             f"3. Compile a list of the top {self.state.num_websites} websites that will help gather information for all these data points.\n\n"
         )
+        query = self.state.section_instruction + query
 
         websites = await search_agent.kickoff_async(query)
         return websites
@@ -85,15 +83,14 @@ class ResearchFlow(Flow[ResearchState]):
         schema_description = get_schema_description(schema_class)
 
         query = (
-            f"Perform a thorough web research of founder {self.state.founder} from company {self.state.company}.\n\n"
             f"You are given a list of relevant wesbites below:\n\n"
             f"{websites}\n\n"
             f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
             f"{schema_description}\n\n"
         )
+        query = self.state.section_instruction + query
 
         result = await scraper_agent.kickoff_async(query, response_format=schema_class)
-        founder_info = extract_structured_output(result, schema_class)
-        print("Founder info:", founder_info)
-        return founder_info
+        print(f"Result for {self.state.section}:", result)
+        return extract_structured_output(result, schema_class)
     

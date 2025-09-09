@@ -7,11 +7,6 @@ class WorkExperience(BaseModel):
     role: Optional[str] = Field(None, description="Role/position held")
     years: Optional[str] = Field(None, description="Time period (e.g., '2020-2023' or 'Present')")
 
-
-class OrganizerFeedback(BaseModel):
-    feedback: str = Field(..., description="Feedback on the data quality and completeness")
-    is_acceptable: bool = Field(..., description="Whether the organized data is acceptable or needs re-processing")
-
 class OrganizedData(BaseModel):
     data: dict = Field(..., description="Organized company data in structured JSON format")
 

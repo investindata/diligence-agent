@@ -1,13 +1,13 @@
 from pydantic import BaseModel
 from typing import Type
-from crewai.flow.flow import Flow, listen, start, router, or_
+from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 from crewai_tools import SerperDevTool
 from crewai import Agent
 from crewai.llm import LLM
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
-from src.diligence_agent.schemas import OrganizerFeedback, FounderNames, Founder
+from src.diligence_agent.schemas import FounderNames
 from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools_with_auth
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 import asyncio
@@ -48,7 +48,6 @@ class DiligenceState(BaseModel):
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
     organizer_iterations: int = 0
     max_organizer_iterations: int = 1
-    organizer_feedback: OrganizerFeedback = OrganizerFeedback(feedback="", is_acceptable=False)
     raw_questionnaire_content: str = ""
     clean_questionnaire_content: dict = {}
     raw_slack_content: str = ""
@@ -67,26 +66,15 @@ organizer_agent = Agent(
     max_iter=8,
 )
 
-researcher_agent = Agent(
-    role="Researcher",
-    goal="Search and scrape the web for valuable information about a topic using both search engines and browser automation.",
-    backstory="You are an excellent researcher who can search the web using Serper and directly navigate websites using Playwright for thorough information gathering. When LinkedIn requires authentication, you can pause and request manual login.",
+get_founders_agent = Agent(
+    role="",
+    goal="Search the web for the founders names.",
+    backstory="You are an excellent researcher who can search the web using Serper.",
     verbose=True,
     llm=llm,
-    max_iter=25,
-    #tools=[SerperDevTool(), SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
-    tools=[SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
+    max_iter=1,
+    tools=[SerperDevTool()]
 )
-
-# research_helper_agent = Agent(
-#     role="Research Helper",
-#     goal="Search the web and retrieve the most relevant results for the task at hand.",
-#     backstory="You are an excellent researcher who can search the web using Serper to search the web.",
-#     verbose=True,
-#     llm=llm,
-#     max_iter=10,
-#     tools=[SerperDevTool()]
-# )
 
 @persist(verbose=True)
 class DiligenceFlow(Flow[DiligenceState]):
@@ -102,7 +90,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         self.state.raw_questionnaire_content = raw_questionnaire_content
         return raw_questionnaire_content
 
-    @listen(or_("retrieve_questionnaire_data", "Repeat"))
+    @listen(retrieve_questionnaire_data)
     async def organize_questionnaire_data(self) -> dict:
         """Create a Google Doc processing task with optional feedback"""
         if self.state.skip_method and self.state.clean_questionnaire_content:
@@ -115,59 +103,11 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"Current date: {self.state.current_date}\n"
             f"Organize this data into a structured JSON format by question and answer. Be thorough and include all relevant details.\n"
         )
-        if self.state.organizer_iterations > 0:
-            query += (
-                f"Below is your previous output and the feedback received. Please use this to improve your response:\n"
-                f"Previous Output:\n{self.state.clean_questionnaire_content}\n\n"
-                f"Feedback:\n{self.state.organizer_feedback.feedback}\n\n"
-            )
         result = await organizer_agent.kickoff_async(query)
-
-
-        clean_questionnaire_data = extract_structured_output(result)
-        self.state.clean_questionnaire_content = clean_questionnaire_data
-        return clean_questionnaire_data
+        self.state.clean_questionnaire_content = extract_structured_output(result)
+        return self.state.clean_questionnaire_content
 
     @listen(organize_questionnaire_data)
-    async def quality_check_organized_data(self, clean_questionnaire_data: dict) -> OrganizerFeedback:
-        if self.state.skip_method and self.state.organizer_feedback.feedback:
-            return self.state.organizer_feedback
-
-        query = (
-            f"Check the output quality of the data organizer against the raw google doc data for company {self.state.company_name}. "
-            f"If the output is too summarized and is missing valuable information, return it to the organizer for re-processing.\n\n"
-            f"Below is the raw Google Docs data:\n\n"
-            f"{self.state.raw_questionnaire_content}\n\n"
-            f"And below is the organized data:\n\n"
-            f"{clean_questionnaire_data}\n\n"
-            f"Be extremely thorough and call out any missing details that exist in the raw data but not in the data organizer's output. "
-            f"Return your feedback in JSON format with 'feedback' (string) and 'is_acceptable' (boolean) fields."
-        )
-        result = await organizer_agent.kickoff_async(query)
-
-        feedback = extract_structured_output(result, OrganizerFeedback)
-
-        self.state.organizer_feedback = feedback
-        self.state.organizer_iterations += 1
-        print("Feedback: ", feedback)
-        return feedback
-
-    @router(quality_check_organized_data)
-    def decide_next_step(self) -> str:
-        """Router to decide whether to continue or loop back to organizer"""
-        # Ensure feedback is boolean
-        is_acceptable = self.state.organizer_feedback.is_acceptable
-        if type(is_acceptable) is str:
-            is_acceptable = is_acceptable.lower() == "true"
-
-        # Check if feedback is acceptable OR we've hit max iterations
-        if (is_acceptable or
-            self.state.organizer_iterations >= self.state.max_organizer_iterations):
-            return "Done"
-        else:
-            return "Repeat"
-
-    @listen("Done")
     async def retrieve_slack_data(self) -> str:
         """Fetch Slack content using MCP tools"""
         if self.state.skip_method and self.state.raw_slack_content:
@@ -241,7 +181,7 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"Search the web for the names of the founders of company {self.state.company_name}. "
             f"Do NOT include any explanation, thought, or commentary. Only output JSON."
         )
-        result = await researcher_agent.kickoff_async(query, response_format=FounderNames)
+        result = await get_founders_agent.kickoff_async(query, response_format=FounderNames)
         self.state.founder_names = extract_structured_output(result, FounderNames)
         print("Founder names:", self.state.founder_names)
         return self.state.founder_names
@@ -254,13 +194,25 @@ class DiligenceFlow(Flow[DiligenceState]):
             subflow = ResearchFlow()
             coroutines.append(subflow.kickoff_async(
                 inputs={
-                    "founder": name,
-                    "company": self.state.company_name,
                     "section": "Founders",
+                    "section_instruction": f"Perform a thorough research on founder {name} of company {self.state.company_name}.\n\n",
+                    "num_search_terms": 1, 
+                    "num_websites": 1,     
                 }
             ))
+        
+        # Create competitive landscape coroutine
+        subflow = ResearchFlow()
+        coroutines.append(subflow.kickoff_async(
+            inputs={
+                "section": "Competitive Landscape",
+                "section_instruction": f"Perform a thorough research on the competitive landscape of company {self.state.company_name}.\n\n",
+                "num_search_terms": 1, 
+                "num_websites": 1,
+            }
+        ))
 
-        # Execute using our central utility function
+        # Execute using our central utility function with unified tracing
         results = await execute_coroutines(coroutines, parallel=self.state.parallel_execution)
         
         # Collect founder profiles from subflow results and make them JSON serializable
@@ -272,50 +224,6 @@ class DiligenceFlow(Flow[DiligenceState]):
         
         print("Founder profiles:", self.state.founder_profiles)
         return self.state.founder_profiles
-
-
-
-    # @listen(get_founders_names)
-    # async def research_helper(self, founder_names):
-    #     if self.state.skip_method and self.state.founder_websites:
-    #         return self.state.founder_websites
-
-    #     # Generate schema description using helper function
-    #     schema_description = get_schema_description(Founder)
-
-    #     query = (
-    #         f"Create a list of the 10 most relevant websites to support a web research on founder {founder_names.names[1]} from company {self.state.company_name}.\n\n"
-    #         f"The websites should be a comprehensive collection covering the following topics needed in the research:\n"
-    #         f"{schema_description}\n\n"
-    #         f"Follow these steps:\n\n"
-    #         f"1. Come up with a list of 5 relevant search terms.\n\n"
-    #         f"2. Perform a search for each term.\n\n"
-    #         f"3. Compile a list of the top 10 websites that will help gather information for all these data points."
-    #     )
-    #     result = await research_helper_agent.kickoff_async(query)
-    #     self.state.founder_websites = result.raw
-    #     print("Websites:", self.state.founder_websites)
-    #     return self.state.founder_websites
-
-
-
-    # @listen(research_helper)
-    # async def research_founder(self):
-
-    #     schema_description = get_schema_description(Founder)
-
-    #     query = (
-    #         f"Perform a thorough web research of founder {self.state.founder_names.names[1]} from company {self.state.company_name}.\n\n"
-    #         f"You are given a list of relevant wesbites below:\n\n"
-    #         f"{self.state.founder_websites}\n\n"
-    #         f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
-    #         f"{schema_description}\n\n"
-    #     )
-
-    #     result = await researcher_agent.kickoff_async(query, response_format=Founder)
-    #     founder_info = extract_structured_output(result, Founder)
-    #     print("Founder info:", founder_info)
-    #     return founder_info
 
 
 
