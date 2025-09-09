@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Type
 from crewai.flow.flow import Flow, listen, start, router, or_
 from crewai.flow.persistence import persist
 from crewai_tools import SerperDevTool
@@ -17,17 +18,29 @@ import json
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
 
+
+def get_schema_description(schema_class: Type[BaseModel]) -> str:
+    """Generate a formatted description of a Pydantic schema's fields."""
+    schema_fields = []
+    for field_name, field_info in schema_class.model_fields.items():
+        description = field_info.description or "No description available"
+        schema_fields.append(f"- {field_name}: {description}")
+    return "\n".join(schema_fields)
+
+
 #model = "gpt-4o-mini"
-#model = "gpt-4.1-mini"
+model = "gpt-4.1-mini"
+#model = "gpt-5-nano"
 #model = "gemini/gemini-1.5-flash"
-model = "gemini/gemini-2.0-flash"
+#model = "gemini/gemini-2.0-flash"
 #model = "gemini/gemini-2.5-flash"
 
 import os
 
 llm = LLM(
     model=model,
-    api_key=os.getenv("GOOGLE_API_KEY"),
+    #api_key=os.getenv("GOOGLE_API_KEY"),
+    api_key=os.getenv("OPENAI_API_KEY"),
     temperature=0.0,
 )
 
@@ -69,8 +82,9 @@ researcher_agent = Agent(
     backstory="You are an excellent researcher who can search the web using Serper and directly navigate websites using Playwright for thorough information gathering. When LinkedIn requires authentication, you can pause and request manual login.",
     verbose=True,
     llm=llm,
-    max_iter=10,
-    tools=[SerperDevTool(), SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
+    max_iter=25,
+    #tools=[SerperDevTool(), SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
+    tools=[SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
 )
 
 research_helper_agent = Agent(
@@ -267,15 +281,11 @@ class DiligenceFlow(Flow[DiligenceState]):
 
     @listen(get_founders_names)
     async def research_helper(self, founder_names):
-        # Generate schema description programmatically
         if self.state.skip_method and self.state.founder_websites:
             return self.state.founder_websites
-        schema_fields = []
-        for field_name, field_info in Founder.model_fields.items():
-            description = field_info.description or "No description available"
-            schema_fields.append(f"- {field_name}: {description}")
-
-        schema_description = "\n".join(schema_fields)
+        
+        # Generate schema description using helper function
+        schema_description = get_schema_description(Founder)
 
         query = (
             f"Create a list of the 10 most relevant websites to support a web research on founder {founder_names.names[0]} from company {self.state.company_name}.\n\n"
@@ -295,19 +305,24 @@ class DiligenceFlow(Flow[DiligenceState]):
 
     @listen(research_helper)
     async def research_founder(self):
+
+        schema_description = get_schema_description(Founder)
+
         query = (
             f"Perform a thorough web research of founder {self.state.founder_names.names[0]} from company {self.state.company_name}.\n\n"
             f"You are given a list of relevant wesbites below:\n\n"
-            f"{self.state.founder_websites}"
-            f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema."
-            f"- Return ONLY a valid JSON object that matches the Founder schema.\n"
-            f"- Do NOT include any explanation, thought, or commentary. Only output JSON."
+            f"{self.state.founder_websites}\n\n"
+            f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
+            f"{schema_description}\n\n"
+            #f"- Return ONLY a valid JSON object that matches the Founder schema.\n"
+            #f"- Do NOT include any explanation, thought, or commentary. Only output JSON."
         )
 
         result = await researcher_agent.kickoff_async(query, response_format=Founder)
         founder_info = extract_structured_output(result, Founder)
         print("Founder info:", founder_info)
         return founder_info
+    
 
 
 async def kickoff():
