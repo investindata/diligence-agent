@@ -187,3 +187,60 @@ def get_shared_playwright_tools():
         from src.diligence_agent.mcp_config import get_playwright_tools_with_auth
         _SHARED_PLAYWRIGHT_TOOLS = get_playwright_tools_with_auth()
     return _SHARED_PLAYWRIGHT_TOOLS
+
+
+# =============================================================================
+# Slack Data Utilities
+# =============================================================================
+
+def fetch_slack_channel_data(channels: list) -> str:
+    """
+    Fetch data from multiple Slack channels using MCP tools.
+    
+    Args:
+        channels: List of channel dictionaries with 'name', 'id', and 'description'
+        
+    Returns:
+        Formatted string containing all channel data
+    """
+    from src.diligence_agent.mcp_config import get_slack_tools
+    
+    all_slack_content = ""
+    slack_tools = get_slack_tools()
+
+    for channel in channels:
+        # Add channel header with name and description
+        channel_header = f"\n# Channel: {channel['name']}\n"
+        channel_header += f"Description: {channel['description']}\n"
+        channel_header += f"Channel ID: {channel['id']}\n\n"
+
+        channel_content = ""
+
+        if slack_tools:
+            try:
+                # Find the slack_get_channel_history tool specifically
+                history_tool = None
+                for tool in slack_tools:
+                    if hasattr(tool, 'name') and tool.name == 'slack_get_channel_history':
+                        history_tool = tool
+                        break
+
+                if history_tool:
+                    # Use the MCP tool to fetch channel messages with correct parameter format
+                    result = history_tool._run(
+                        channel_id=channel['id'],
+                        limit=500
+                    )
+                    channel_content = f"Messages from {channel['name']}:\n{result}\n"
+                else:
+                    channel_content = f"slack_get_channel_history tool not found for {channel['name']}\n"
+
+            except Exception as e:
+                channel_content = f"Error fetching data from {channel['name']}: {str(e)}\n"
+        else:
+            channel_content = f"Slack MCP tools not available for {channel['name']}\n"
+
+        # Concatenate channel info with content
+        all_slack_content += channel_header + channel_content + "\n"
+
+    return all_slack_content

@@ -5,7 +5,7 @@ from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
-from src.diligence_agent.schemas import Founder, CompetitiveLandscape
+from src.diligence_agent.schemas import Founder, CompetitiveLandscape, Market
 from src.diligence_agent.utils import extract_structured_output, get_schema_description, get_shared_playwright_tools
 
 import os
@@ -15,6 +15,7 @@ def get_schema_for_section(section: str):
     schema_mapping = {
         "Founders": Founder,
         "Competitive Landscape": CompetitiveLandscape,
+        "Market": Market,
     }
     return schema_mapping.get(section)  
 
@@ -42,7 +43,7 @@ scraper_agent = Agent(
     backstory="You are an excellent researcher who can navigate websites using Playwright for thorough information gathering.",
     verbose=True,
     llm=llm,
-    max_iter=25,
+    max_iter=15,
     #tools=[SimpleLinkedInAuthTool()] + get_shared_playwright_tools()
     tools=[SerperScrapeWebsiteTool()]
 )

@@ -8,11 +8,11 @@ from crewai.llm import LLM
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.schemas import FounderNames
-from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools_with_auth
+from src.diligence_agent.mcp_config import get_playwright_tools_with_auth
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 import asyncio
 from src.diligence_agent.research_flow import ResearchFlow, ResearchState
-from src.diligence_agent.utils import execute_coroutines, extract_structured_output, make_json_serializable
+from src.diligence_agent.utils import execute_coroutines, extract_structured_output, make_json_serializable, fetch_slack_channel_data
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
 
@@ -113,45 +113,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         if self.state.skip_method and self.state.raw_slack_content:
             return self.state.raw_slack_content
 
-        all_slack_content = ""
-        slack_tools = get_slack_tools()
-
-        for channel in self.state.slack_channels:
-            # Add channel header with name and description
-            channel_header = f"\n# Channel: {channel['name']}\n"
-            channel_header += f"Description: {channel['description']}\n"
-            channel_header += f"Channel ID: {channel['id']}\n\n"
-
-            channel_content = ""
-
-            if slack_tools:
-                try:
-                    # Find the slack_get_channel_history tool specifically
-                    history_tool = None
-                    for tool in slack_tools:
-                        if hasattr(tool, 'name') and tool.name == 'slack_get_channel_history':
-                            history_tool = tool
-                            break
-
-                    if history_tool:
-                        # Use the MCP tool to fetch channel messages with correct parameter format
-                        result = history_tool._run(
-                            channel_id=channel['id'],
-                            limit=500
-                        )
-                        channel_content = f"Messages from {channel['name']}:\n{result}\n"
-                    else:
-                        channel_content = f"slack_get_channel_history tool not found for {channel['name']}\n"
-
-                except Exception as e:
-                    channel_content = f"Error fetching data from {channel['name']}: {str(e)}\n"
-            else:
-                channel_content = f"Slack MCP tools not available for {channel['name']}\n"
-
-            # Concatenate channel info with content
-            all_slack_content += channel_header + channel_content + "\n"
-
-        self.state.raw_slack_content = all_slack_content
+        self.state.raw_slack_content = fetch_slack_channel_data(self.state.slack_channels)
         return self.state.raw_slack_content
 
     @listen(retrieve_slack_data)
@@ -207,6 +169,17 @@ class DiligenceFlow(Flow[DiligenceState]):
             inputs={
                 "section": "Competitive Landscape",
                 "section_instruction": f"Perform a thorough research on the competitive landscape of company {self.state.company_name}.\n\n",
+                "num_search_terms": 1, 
+                "num_websites": 1,
+            }
+        ))
+
+        # Create market coroutine
+        subflow = ResearchFlow()
+        coroutines.append(subflow.kickoff_async(
+            inputs={
+                "section": "Market",
+                "section_instruction": f"Perform a thorough research on the market of company {self.state.company_name}.\n\n",
                 "num_search_terms": 1, 
                 "num_websites": 1,
             }

@@ -55,3 +55,23 @@ class CompetitiveLandscape(BaseModel):
     barriers_to_entry: Optional[List[str]] = Field(None, description="Factors that make it difficult for new competitors to enter the space")
     overall_analysis: Optional[str] = Field(None, description="Analyst-style summary of the competitive landscape, highlighting opportunities and threats")
     positioning_summary: Optional[str] = Field(None, description="How the target company is positioned relative to competitors")
+
+
+class MarketSegment(BaseModel):
+    name: str
+    description: Optional[str] = None
+    size: Optional[str] = None  # e.g., "$10B in 2024"
+    growth_rate: Optional[str] = None  # e.g., "15% CAGR"
+    key_drivers: Optional[List[str]] = None
+    key_challenges: Optional[List[str]] = None
+    customer_types: Optional[List[str]] = None
+
+class Market(BaseModel):
+    total_addressable_market: Optional[str] = None  # e.g., "$50B globally"
+    serviceable_available_market: Optional[str] = None
+    serviceable_obtainable_market: Optional[str] = None
+    segments: Optional[List[MarketSegment]] = None
+    trends: Optional[List[str]] = None  # e.g., "increasing demand for generative AI"
+    risks: Optional[List[str]] = None  # e.g., "regulatory uncertainty"
+    major_geographies: Optional[List[str]] = None  # e.g., "US, Europe, APAC"
+    overall_summary: Optional[str] = None
