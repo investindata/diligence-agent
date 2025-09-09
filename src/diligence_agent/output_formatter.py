@@ -9,22 +9,22 @@ from typing import Type, Any
 from pydantic import BaseModel
 
 
-def extract_structured_output(result: Any, target_schema: Type[BaseModel]) -> BaseModel:
+def extract_structured_output(result: Any, target_schema: Type[BaseModel] = None):
     """
     Extract structured output from CrewAI result, cleaning if necessary.
     
     Args:
         result: CrewAI agent result object
-        target_schema: Pydantic model to validate against
+        target_schema: Optional Pydantic model to validate against
         
     Returns:
-        Validated instance of target_schema
+        Validated instance of target_schema if provided, otherwise dict
         
     Raises:
         ValueError: If extraction and parsing fails
     """
-    # First try: if pydantic object exists, use it
-    if hasattr(result, 'pydantic') and result.pydantic:
+    # First try: if pydantic object exists and schema is requested, use it
+    if target_schema and hasattr(result, 'pydantic') and result.pydantic:
         return result.pydantic
     
     # Second try: extract raw output and clean it
@@ -43,8 +43,13 @@ def extract_structured_output(result: Any, target_schema: Type[BaseModel]) -> Ba
     
     try:
         parsed_data = json.loads(cleaned)
-        return target_schema(**parsed_data)
+        if target_schema:
+            return target_schema(**parsed_data)
+        else:
+            return parsed_data
     except json.JSONDecodeError as e:
-        raise ValueError(f"Could not parse JSON for {target_schema.__name__}: {e}")
+        schema_name = target_schema.__name__ if target_schema else "JSON"
+        raise ValueError(f"Could not parse JSON for {schema_name}: {e}")
     except Exception as e:
-        raise ValueError(f"Could not validate {target_schema.__name__} schema: {e}")
+        schema_name = target_schema.__name__ if target_schema else "JSON"
+        raise ValueError(f"Could not validate {schema_name} schema: {e}")

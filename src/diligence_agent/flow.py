@@ -131,19 +131,9 @@ class DiligenceFlow(Flow[DiligenceState]):
                 f"Feedback:\n{self.state.organizer_feedback.feedback}\n\n"
             )
         result = await organizer_agent.kickoff_async(query)
+        
 
-        # Parse the raw JSON output
-        raw_output = result.raw if hasattr(result, 'raw') else str(result)
-        is_valid, cleaned_json = validate_json_output(raw_output)
-
-        if is_valid:
-            try:
-                parsed_data = json.loads(cleaned_json)
-                clean_questionnaire_data = parsed_data.get('data', parsed_data)  # Try root level if 'data' doesn't exist
-            except (json.JSONDecodeError, KeyError):
-                clean_questionnaire_data = {}
-        else:
-            clean_questionnaire_data = {}
+        clean_questionnaire_data = extract_structured_output(result)
         self.state.clean_questionnaire_content = clean_questionnaire_data
         return clean_questionnaire_data
 
@@ -164,21 +154,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         )
         result = await organizer_agent.kickoff_async(query)
 
-        # Parse the raw JSON output
-        raw_output = result.raw if hasattr(result, 'raw') else str(result)
-        is_valid, cleaned_json = validate_json_output(raw_output)
-
-        if is_valid:
-            try:
-                parsed_feedback = json.loads(cleaned_json)
-                feedback = OrganizerFeedback(
-                    feedback=parsed_feedback.get('feedback', 'Error parsing feedback'),
-                    is_acceptable=parsed_feedback.get('is_acceptable', False)
-                )
-            except (json.JSONDecodeError, ValueError):
-                feedback = OrganizerFeedback(feedback="Error parsing feedback JSON", is_acceptable=False)
-        else:
-            feedback = OrganizerFeedback(feedback="Error getting feedback - invalid JSON", is_acceptable=False)
+        feedback = extract_structured_output(result, OrganizerFeedback)
 
         self.state.organizer_feedback = feedback
         self.state.organizer_iterations += 1
@@ -288,7 +264,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         schema_description = get_schema_description(Founder)
 
         query = (
-            f"Create a list of the 10 most relevant websites to support a web research on founder {founder_names.names[0]} from company {self.state.company_name}.\n\n"
+            f"Create a list of the 10 most relevant websites to support a web research on founder {founder_names.names[1]} from company {self.state.company_name}.\n\n"
             f"The websites should be a comprehensive collection covering the following topics needed in the research:\n"
             f"{schema_description}\n\n"
             f"Follow these steps:\n\n"
@@ -309,7 +285,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         schema_description = get_schema_description(Founder)
 
         query = (
-            f"Perform a thorough web research of founder {self.state.founder_names.names[0]} from company {self.state.company_name}.\n\n"
+            f"Perform a thorough web research of founder {self.state.founder_names.names[1]} from company {self.state.company_name}.\n\n"
             f"You are given a list of relevant wesbites below:\n\n"
             f"{self.state.founder_websites}\n\n"
             f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
