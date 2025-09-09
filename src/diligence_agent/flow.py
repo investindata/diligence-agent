@@ -8,24 +8,14 @@ from crewai.llm import LLM
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.schemas import OrganizerFeedback, FounderNames, Founder
-
-from src.diligence_agent.workflow import validate_json_output
 from src.diligence_agent.output_formatter import extract_structured_output
 from src.diligence_agent.mcp_config import get_slack_tools, get_playwright_tools_with_auth
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 import asyncio
-import json
+from src.diligence_agent.research_flow import ResearchFlow, ResearchState
+from src.diligence_agent.schemas import Founder
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
-
-
-def get_schema_description(schema_class: Type[BaseModel]) -> str:
-    """Generate a formatted description of a Pydantic schema's fields."""
-    schema_fields = []
-    for field_name, field_info in schema_class.model_fields.items():
-        description = field_info.description or "No description available"
-        schema_fields.append(f"- {field_name}: {description}")
-    return "\n".join(schema_fields)
 
 
 #model = "gpt-4o-mini"
@@ -52,6 +42,7 @@ class DiligenceState(BaseModel):
     skip_method: bool = False
     founder_names: FounderNames = FounderNames(names=[])
     founder_websites: str = ""
+    founder_profiles: list[dict] = []
 
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
@@ -87,15 +78,15 @@ researcher_agent = Agent(
     tools=[SimpleLinkedInAuthTool()] + get_playwright_tools_with_auth()
 )
 
-research_helper_agent = Agent(
-    role="Research Helper",
-    goal="Search the web and retrieve the most relevant results for the task at hand.",
-    backstory="You are an excellent researcher who can search the web using Serper to search the web.",
-    verbose=True,
-    llm=llm,
-    max_iter=10,
-    tools=[SerperDevTool()]
-)
+# research_helper_agent = Agent(
+#     role="Research Helper",
+#     goal="Search the web and retrieve the most relevant results for the task at hand.",
+#     backstory="You are an excellent researcher who can search the web using Serper to search the web.",
+#     verbose=True,
+#     llm=llm,
+#     max_iter=10,
+#     tools=[SerperDevTool()]
+# )
 
 @persist(verbose=True)
 class DiligenceFlow(Flow[DiligenceState]):
@@ -131,7 +122,7 @@ class DiligenceFlow(Flow[DiligenceState]):
                 f"Feedback:\n{self.state.organizer_feedback.feedback}\n\n"
             )
         result = await organizer_agent.kickoff_async(query)
-        
+
 
         clean_questionnaire_data = extract_structured_output(result)
         self.state.clean_questionnaire_content = clean_questionnaire_data
@@ -256,49 +247,82 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.founder_names
 
     @listen(get_founders_names)
-    async def research_helper(self, founder_names):
-        if self.state.skip_method and self.state.founder_websites:
-            return self.state.founder_websites
+    async def run_research_flows(self):
+        # Run subflows in parallel
+        subflows = []
+
+        # Founders flow
+        for name in self.state.founder_names.names:
+            subflow = ResearchFlow()
+            subflows.append(subflow.kickoff_async(
+                inputs={
+                    "founder": name,
+                    "company": self.state.company_name,
+                    "section": "Founders",
+                }
+            ))
+
+        results = await asyncio.gather(*subflows)
         
-        # Generate schema description using helper function
-        schema_description = get_schema_description(Founder)
-
-        query = (
-            f"Create a list of the 10 most relevant websites to support a web research on founder {founder_names.names[1]} from company {self.state.company_name}.\n\n"
-            f"The websites should be a comprehensive collection covering the following topics needed in the research:\n"
-            f"{schema_description}\n\n"
-            f"Follow these steps:\n\n"
-            f"1. Come up with a list of 5 relevant search terms.\n\n"
-            f"2. Perform a search for each term.\n\n"
-            f"3. Compile a list of the top 10 websites that will help gather information for all these data points."
-        )
-        result = await research_helper_agent.kickoff_async(query)
-        self.state.founder_websites = result.raw
-        print("Websites:", self.state.founder_websites)
-        return self.state.founder_websites
+        # Collect founder profiles from subflow results and convert to dictionaries for JSON serialization
+        self.state.founder_profiles = []
+        for result in results:
+            if hasattr(result, 'model_dump'):
+                # Convert Pydantic object to dict
+                self.state.founder_profiles.append(result.model_dump())
+            elif isinstance(result, dict):
+                self.state.founder_profiles.append(result)
+            else:
+                # Fallback for other types
+                self.state.founder_profiles.append(str(result))
+        
+        print("Founder profiles:", self.state.founder_profiles)
+        return self.state.founder_profiles
 
 
 
-    @listen(research_helper)
-    async def research_founder(self):
+    # @listen(get_founders_names)
+    # async def research_helper(self, founder_names):
+    #     if self.state.skip_method and self.state.founder_websites:
+    #         return self.state.founder_websites
 
-        schema_description = get_schema_description(Founder)
+    #     # Generate schema description using helper function
+    #     schema_description = get_schema_description(Founder)
 
-        query = (
-            f"Perform a thorough web research of founder {self.state.founder_names.names[1]} from company {self.state.company_name}.\n\n"
-            f"You are given a list of relevant wesbites below:\n\n"
-            f"{self.state.founder_websites}\n\n"
-            f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
-            f"{schema_description}\n\n"
-            #f"- Return ONLY a valid JSON object that matches the Founder schema.\n"
-            #f"- Do NOT include any explanation, thought, or commentary. Only output JSON."
-        )
+    #     query = (
+    #         f"Create a list of the 10 most relevant websites to support a web research on founder {founder_names.names[1]} from company {self.state.company_name}.\n\n"
+    #         f"The websites should be a comprehensive collection covering the following topics needed in the research:\n"
+    #         f"{schema_description}\n\n"
+    #         f"Follow these steps:\n\n"
+    #         f"1. Come up with a list of 5 relevant search terms.\n\n"
+    #         f"2. Perform a search for each term.\n\n"
+    #         f"3. Compile a list of the top 10 websites that will help gather information for all these data points."
+    #     )
+    #     result = await research_helper_agent.kickoff_async(query)
+    #     self.state.founder_websites = result.raw
+    #     print("Websites:", self.state.founder_websites)
+    #     return self.state.founder_websites
 
-        result = await researcher_agent.kickoff_async(query, response_format=Founder)
-        founder_info = extract_structured_output(result, Founder)
-        print("Founder info:", founder_info)
-        return founder_info
-    
+
+
+    # @listen(research_helper)
+    # async def research_founder(self):
+
+    #     schema_description = get_schema_description(Founder)
+
+    #     query = (
+    #         f"Perform a thorough web research of founder {self.state.founder_names.names[1]} from company {self.state.company_name}.\n\n"
+    #         f"You are given a list of relevant wesbites below:\n\n"
+    #         f"{self.state.founder_websites}\n\n"
+    #         f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
+    #         f"{schema_description}\n\n"
+    #     )
+
+    #     result = await researcher_agent.kickoff_async(query, response_format=Founder)
+    #     founder_info = extract_structured_output(result, Founder)
+    #     print("Founder info:", founder_info)
+    #     return founder_info
+
 
 
 async def kickoff():

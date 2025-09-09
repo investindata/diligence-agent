@@ -1,5 +1,15 @@
-from typing import List, Optional, Annotated
+from typing import List, Optional, Annotated, Type
 from pydantic import BaseModel, HttpUrl, Field
+
+
+def get_schema_description(schema_class: Type[BaseModel]) -> str:
+    """Generate a formatted description of a Pydantic schema's fields."""
+    schema_fields = []
+    for field_name, field_info in schema_class.model_fields.items():
+        description = field_info.description or "No description available"
+        schema_fields.append(f"- {field_name}: {description}")
+    return "\n".join(schema_fields)
+
 
 class WorkExperience(BaseModel):
     company: str = Field(..., description="Company name")
@@ -37,4 +47,25 @@ class FoundersSection(BaseModel):
     risks: Annotated[Optional[List[str]], Field(description="Key risks across the founding team")] = None
 
 
-    
+class Competitor(BaseModel):
+    name: str = Field(..., description="Name of the competitor company")
+    description: Optional[str] = Field(None, description="Brief description of the competitor’s business, product, or service")
+    website: Optional[HttpUrl] = Field(None, description="Official website of the competitor")
+    products_or_services: Optional[List[str]] = Field(None, description="List of notable products or services offered")
+    target_customers: Optional[str] = Field(None, description="Target audience or customer segments")
+    funding_stage: Optional[str] = Field(None, description="Known funding stage (e.g., seed, Series A, public)")
+    market_share: Optional[str] = Field(None, description="Approximate market share or market presence")
+    strengths: Optional[List[str]] = Field(None, description="Competitive advantages or differentiators")
+    weaknesses: Optional[List[str]] = Field(None, description="Limitations, gaps, or weaknesses")
+    notable_investors: Optional[List[str]] = Field(None, description="List of notable investors, if any")
+    other_profiles: Optional[List[HttpUrl]] = Field(None, description="Links to profiles such as Crunchbase, LinkedIn, etc.")
+
+
+class CompetitiveLandscape(BaseModel):
+    direct_competitors: List[Competitor] = Field(..., description="Companies offering highly similar products/services targeting the same market")
+    indirect_competitors: Optional[List[Competitor]] = Field(None, description="Companies offering alternative or adjacent solutions")
+    emerging_competitors: Optional[List[Competitor]] = Field(None, description="New entrants or startups showing traction in the space")
+    substitutes: Optional[List[str]] = Field(None, description="Alternative solutions that address the same customer need but differently")
+    barriers_to_entry: Optional[List[str]] = Field(None, description="Factors that make it difficult for new competitors to enter the space")
+    overall_analysis: Optional[str] = Field(None, description="Analyst-style summary of the competitive landscape, highlighting opportunities and threats")
+    positioning_summary: Optional[str] = Field(None, description="How the target company is positioned relative to competitors")
