@@ -33,6 +33,12 @@ def extract_structured_output(result: Any, target_schema: Type[BaseModel]) -> Ba
     # Remove markdown code blocks (```json at start, ``` at end)
     cleaned = re.sub(r'^```json\s*\n?', '', raw_output.strip(), flags=re.MULTILINE)
     cleaned = re.sub(r'\n?```\s*$', '', cleaned, flags=re.MULTILINE)
+    
+    # Extract only JSON content within curly brackets
+    json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+    if json_match:
+        cleaned = json_match.group(0)
+    
     cleaned = cleaned.strip()
     
     try:
