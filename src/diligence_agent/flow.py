@@ -1,18 +1,15 @@
 from pydantic import BaseModel
-from typing import Type
+from typing import Dict, Any, Optional
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
-from crewai_tools import SerperDevTool
 from crewai import Agent
 from crewai.llm import LLM
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
-from src.diligence_agent.schemas import FounderNames
-from src.diligence_agent.mcp_config import get_playwright_tools_with_auth
-from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 import asyncio
-from src.diligence_agent.research_flow import ResearchFlow, ResearchState
-from src.diligence_agent.utils import execute_coroutines, extract_structured_output, make_json_serializable, fetch_slack_channel_data
+from src.diligence_agent.research_flow import ResearchFlow
+from src.diligence_agent.schemas import ReportStructure
+from src.diligence_agent.utils import execute_coroutines, extract_structured_output, fetch_slack_channel_data
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
 
@@ -40,18 +37,16 @@ class DiligenceState(BaseModel):
     current_date: str = ""
     skip_method: bool = False
     parallel_execution: bool = False  # Toggle for parallel vs sequential execution
-    founder_names: FounderNames = FounderNames(names=[])
-    founder_websites: str = ""
-    founder_profiles: list[dict] = []
 
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
-    organizer_iterations: int = 0
-    max_organizer_iterations: int = 1
     raw_questionnaire_content: str = ""
     clean_questionnaire_content: dict = {}
     raw_slack_content: str = ""
     clean_slack_content: str = ""
+
+    # research report structure
+    report_structure: ReportStructure = ReportStructure()
 
     # slack organizer flow
     slack_channels: list = [{"name": "diligence_tensorstax", "id":"C09AE80U8C8","description": "Dedicated channel for TensorStax due diligence discussions."},
@@ -66,15 +61,6 @@ organizer_agent = Agent(
     max_iter=8,
 )
 
-get_founders_agent = Agent(
-    role="",
-    goal="Search the web for the founders names.",
-    backstory="You are an excellent researcher who can search the web using Serper.",
-    verbose=True,
-    llm=llm,
-    max_iter=1,
-    tools=[SerperDevTool()]
-)
 
 @persist(verbose=True)
 class DiligenceFlow(Flow[DiligenceState]):
@@ -91,7 +77,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         return raw_questionnaire_content
 
     @listen(retrieve_questionnaire_data)
-    async def organize_questionnaire_data(self) -> dict:
+    async def organize_questionnaire_data(self) -> Dict[str, Any]:
         """Create a Google Doc processing task with optional feedback"""
         if self.state.skip_method and self.state.clean_questionnaire_content:
             return self.state.clean_questionnaire_content
@@ -104,7 +90,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"Organize this data into a structured JSON format by question and answer. Be thorough and include all relevant details.\n"
         )
         result = await organizer_agent.kickoff_async(query)
-        self.state.clean_questionnaire_content = extract_structured_output(result)
+        extracted_data = extract_structured_output(result)
+        self.state.clean_questionnaire_content = extracted_data if isinstance(extracted_data, dict) else {}
         return self.state.clean_questionnaire_content
 
     @listen(organize_questionnaire_data)
@@ -136,85 +123,67 @@ class DiligenceFlow(Flow[DiligenceState]):
         return clean_slack_data
 
     @listen(organize_slack_data)
-    async def get_founders_names(self):
-        if self.state.skip_method and self.state.founder_names:
-            return self.state.founder_names
-        query = (
-            f"Search the web for the names of the founders of company {self.state.company_name}. "
-            f"Do NOT include any explanation, thought, or commentary. Only output JSON."
-        )
-        result = await get_founders_agent.kickoff_async(query, response_format=FounderNames)
-        self.state.founder_names = extract_structured_output(result, FounderNames)
-        print("Founder names:", self.state.founder_names)
-        return self.state.founder_names
+    async def run_research_flows(self) -> ReportStructure:
+        # Define common inputs for all research flows
+        base_inputs = {
+            "company": self.state.company_name,
+            "questionnaire_data": self.state.clean_questionnaire_content,
+            "slack_data": self.state.clean_slack_content,
+            "num_search_terms": 3,
+            "num_websites": 5,
+        }
 
-    @listen(get_founders_names)
-    async def run_research_flows(self):
-        # Create coroutines for all founder research tasks
+        # Define research sections and their corresponding schema fields
+        research_sections = [
+            ("Founders", "founders_section"),
+            ("Competitive Landscape", "competitive_landscape_section"),
+            ("Market", "market_section")
+        ]
+
+        # Create coroutines for all research flows
         coroutines = []
-        for name in self.state.founder_names.names:
+        for section_name, _ in research_sections:
             subflow = ResearchFlow()
             coroutines.append(subflow.kickoff_async(
                 inputs={
-                    "section": "Founders",
-                    "section_instruction": f"Perform a thorough research on founder {name} of company {self.state.company_name}.\n\n",
-                    "num_search_terms": 1, 
-                    "num_websites": 1,     
+                    **base_inputs,
+                    "section": section_name,
                 }
             ))
-        
-        # Create competitive landscape coroutine
-        subflow = ResearchFlow()
-        coroutines.append(subflow.kickoff_async(
-            inputs={
-                "section": "Competitive Landscape",
-                "section_instruction": f"Perform a thorough research on the competitive landscape of company {self.state.company_name}.\n\n",
-                "num_search_terms": 1, 
-                "num_websites": 1,
-            }
-        ))
-
-        # Create market coroutine
-        subflow = ResearchFlow()
-        coroutines.append(subflow.kickoff_async(
-            inputs={
-                "section": "Market",
-                "section_instruction": f"Perform a thorough research on the market of company {self.state.company_name}.\n\n",
-                "num_search_terms": 1, 
-                "num_websites": 1,
-            }
-        ))
 
         # Execute using our central utility function with unified tracing
         results = await execute_coroutines(coroutines, parallel=self.state.parallel_execution)
-        
-        # Collect founder profiles from subflow results and make them JSON serializable
-        self.state.founder_profiles = []
-        for result in results:
-            # Use utility function to handle all JSON serialization including HttpUrl
-            serialized_result = make_json_serializable(result)
-            self.state.founder_profiles.append(serialized_result)
-        
-        print("Founder profiles:", self.state.founder_profiles)
-        return self.state.founder_profiles
+
+        # Map research results to appropriate report structure fields
+        for i, (section_name, field_name) in enumerate(research_sections):
+            if i < len(results):
+                # Extract markdown content from result
+                markdown_content = str(results[i]) if results[i] else ""
+                # Set the appropriate field in report structure
+                setattr(self.state.report_structure, field_name, markdown_content)
+                print(f"✅ {section_name} research completed and added to report")
+
+        print(f"🎉 All research flows completed! Report structure populated.")
+        return self.state.report_structure
 
 
 
-async def kickoff(parallel_execution: bool = True):
+async def kickoff(parallel_execution: bool = True) -> Any:
     diligence_flow = DiligenceFlow()
     result = await diligence_flow.kickoff_async(
         inputs={
-            "company_name": "tensorstax", 
-            "current_date": datetime.now().strftime("%Y-%m-%d"), 
+            "company_name": "tensorstax",
+            "current_date": datetime.now().strftime("%Y-%m-%d"),
             "skip_method": False,
             "parallel_execution": parallel_execution
         }
     )
-    print(f"🆔 Flow completed! To run individual tasks, use this ID: {diligence_flow.state.id}")
+    flow_id = getattr(diligence_flow.state, 'id', 'unknown')
+    print(f"🆔 Flow completed! To run individual tasks, use this ID: {flow_id}")
     return result
 
 
-async def kickoff_task(flow_id: str = None):
+async def kickoff_task(flow_id: Optional[str] = None) -> Any:
     """Run a single task of the flow with persistent state."""
 
     diligence_flow = DiligenceFlow()
@@ -230,7 +199,8 @@ async def kickoff_task(flow_id: str = None):
             inputs={"company_name": "tensorstax", "current_date": datetime.now().strftime("%Y-%m-%d"), "skip_method": True}
         )
 
-    print(f"✅ Task completed using flow ID: {diligence_flow.state.id}")
+    flow_id = getattr(diligence_flow.state, 'id', 'unknown')
+    print(f"✅ Task completed using flow ID: {flow_id}")
     return result
 
 
