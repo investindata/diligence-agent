@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from typing import Any
 from crewai.flow.flow import Flow, listen, start
-from crewai.flow.persistence import persist
 from src.diligence_agent.utils import extract_structured_output, get_schema_description, get_schema_for_section, get_shared_playwright_tools
 from src.diligence_agent.agents import search_agent, scraper_agent, writer_agent
 import asyncio
@@ -18,7 +17,6 @@ class ResearchState(BaseModel):
     num_search_terms: int = 5
     num_websites: int = 10
 
-@persist(verbose=True)
 class ResearchFlow(Flow[ResearchState]):
 
     @start()

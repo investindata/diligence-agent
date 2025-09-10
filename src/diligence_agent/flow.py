@@ -26,7 +26,6 @@ class DiligenceState(BaseModel):
     company_name: str = ""
     current_date: str = ""
     skip_method: bool = False
-    parallel_execution: bool = False  # Toggle for parallel vs sequential execution
 
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
@@ -125,7 +124,6 @@ class DiligenceFlow(Flow[DiligenceState]):
             research_sections,
             base_inputs,
             self.state.report_structure,
-            self.state.parallel_execution,
             self.state.company_name
         )
 
@@ -157,7 +155,6 @@ class DiligenceFlow(Flow[DiligenceState]):
             non_research_sections,
             base_inputs,
             self.state.report_structure,
-            self.state.parallel_execution,
             self.state.company_name
         )
 
@@ -188,14 +185,13 @@ class DiligenceFlow(Flow[DiligenceState]):
         return final_report
 
 
-async def kickoff(parallel_execution: bool = True) -> Any:
+async def kickoff() -> Any:
     diligence_flow = DiligenceFlow()
     result = await diligence_flow.kickoff_async(
         inputs={
             "company_name": "tensorstax",
             "current_date": datetime.now().strftime("%Y-%m-%d"),
-            "skip_method": False,
-            "parallel_execution": parallel_execution
+            "skip_method": False
         }
     )
     flow_id = getattr(diligence_flow.state, 'id', 'unknown')

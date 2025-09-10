@@ -23,7 +23,6 @@ class NonResearchState(BaseModel):
         report_conclusion_section=""
     )
 
-@persist(verbose=True)
 class NonResearchFlow(Flow[NonResearchState]):
 
     @start()

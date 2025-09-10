@@ -19,28 +19,21 @@ async def execute_subflows_and_map_results(
     sections: List[str], 
     base_inputs: dict,
     report_structure,
-    parallel: bool = True,
-    company_name: str = "",
-    output_dir: str = "reports"
+    company_name: str = ""
 ) -> Any:
     """
-    Execute multiple subflows and map results to report structure fields.
+    Execute multiple subflows in parallel and map results to report structure fields.
     
     Args:
         subflow_class: The Flow class to instantiate for each section
         sections: List of section names to process
         base_inputs: Common inputs for all subflows
         report_structure: Report structure object to update
-        parallel: Whether to execute in parallel or sequentially
         company_name: Company name for file naming
-        output_dir: Directory to save individual section reports
         
     Returns:
         Updated report structure
     """
-    # Ensure output directory exists
-    os.makedirs(output_dir, exist_ok=True)
-    
     # Create coroutines for all flows
     coroutines = []
     for section_name in sections:
@@ -52,8 +45,8 @@ async def execute_subflows_and_map_results(
             }
         ))
 
-    # Execute using our central utility function with unified tracing
-    results = await execute_coroutines(coroutines, parallel=parallel)
+    # Execute all subflows in parallel using asyncio.gather
+    results = await asyncio.gather(*coroutines)
 
     # Map results to appropriate report structure fields using centralized mapping
     for i, section_name in enumerate(sections):
@@ -76,37 +69,6 @@ async def execute_subflows_and_map_results(
                 print(f"✅ {section_name} research completed (no content generated)")
 
     return report_structure
-
-async def execute_coroutines(coroutines: List[Coroutine], parallel: bool = True) -> List[Any]:
-    """
-    Execute a list of coroutines either in parallel or sequentially with unified tracing.
-    
-    This function ensures all executions appear under the same trace hierarchy:
-    - Parallel: Uses asyncio.gather() which preserves context via contextvars
-    - Sequential: Executes with explicit trace context propagation for unified Opik tracing
-    
-    Args:
-        coroutines: List of coroutines to execute
-        parallel: If True, run in parallel; if False, run sequentially
-        
-    Returns:
-        List of results in the same order as input coroutines
-    """
-    if parallel:
-        # asyncio.gather automatically propagates context to each coroutine
-        return await asyncio.gather(*coroutines)
-    else:
-        # Sequential execution with unified tracing context
-        results = []
-        
-        # Sequential execution with standard async context propagation
-        # Context variables and asyncio naturally propagate context in sequential execution
-        for i, coro in enumerate(coroutines):
-            print(f"Executing SubFlow {i+1} sequentially...")
-            result = await coro
-            results.append(result)
-        
-        return results
 
 
 # =============================================================================
@@ -131,9 +93,6 @@ def extract_structured_output(result: Any, target_schema: Optional[Type[BaseMode
         
     Returns:
         Validated instance of target_schema if provided, otherwise dict
-        
-    Raises:
-        ValueError: If extraction and parsing fails
     """
     # First try: if pydantic object exists and schema is requested, use it
     if target_schema and hasattr(result, 'pydantic') and result.pydantic:
@@ -141,6 +100,14 @@ def extract_structured_output(result: Any, target_schema: Optional[Type[BaseMode
     
     # Second try: extract raw output and clean it
     raw_output = result.raw if hasattr(result, 'raw') else str(result)
+    
+    # Check if raw output is empty or just whitespace
+    if not raw_output or not raw_output.strip():
+        if target_schema:
+            # Return empty instance of target schema
+            return target_schema()
+        else:
+            return {}
     
     # Remove markdown code blocks (```json at start, ``` at end)
     cleaned = re.sub(r'^```json\s*\n?', '', raw_output.strip(), flags=re.MULTILINE)
@@ -153,6 +120,13 @@ def extract_structured_output(result: Any, target_schema: Optional[Type[BaseMode
     
     cleaned = cleaned.strip()
     
+    # If still empty after cleaning, return empty result
+    if not cleaned:
+        if target_schema:
+            return target_schema()
+        else:
+            return {}
+    
     try:
         parsed_data = json.loads(cleaned)
         if target_schema:
@@ -161,10 +135,21 @@ def extract_structured_output(result: Any, target_schema: Optional[Type[BaseMode
             return parsed_data
     except json.JSONDecodeError as e:
         schema_name = target_schema.__name__ if target_schema else "JSON"
-        raise ValueError(f"Could not parse JSON for {schema_name}: {e}")
+        print(f"Warning: Could not parse JSON for {schema_name}: {e}")
+        print(f"Raw output was: {repr(raw_output)}")
+        # Return empty instance instead of raising error
+        if target_schema:
+            return target_schema()
+        else:
+            return {}
     except Exception as e:
         schema_name = target_schema.__name__ if target_schema else "JSON"
-        raise ValueError(f"Could not validate {schema_name} schema: {e}")
+        print(f"Warning: Could not validate {schema_name} schema: {e}")
+        # Return empty instance instead of raising error
+        if target_schema:
+            return target_schema()
+        else:
+            return {}
 
 
 def validate_json_output(output_text: str) -> tuple[bool, str]:
