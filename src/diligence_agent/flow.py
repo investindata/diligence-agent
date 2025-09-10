@@ -129,15 +129,18 @@ class DiligenceFlow(Flow[DiligenceState]):
             "company": self.state.company_name,
             "questionnaire_data": self.state.clean_questionnaire_content,
             "slack_data": self.state.clean_slack_content,
+            "current_date": self.state.current_date,
             "num_search_terms": 3,
             "num_websites": 5,
         }
 
         # Define research sections and their corresponding schema fields
         research_sections = [
-            ("Founders", "founders_section"),
-            ("Competitive Landscape", "competitive_landscape_section"),
-            ("Market", "market_section")
+            
+            ("Product", "product_section"),
+            #("Competitive Landscape", "competitive_landscape_section"),
+            #("Market", "market_section"),
+            #("Founders", "founders_section"),
         ]
 
         # Create coroutines for all research flows

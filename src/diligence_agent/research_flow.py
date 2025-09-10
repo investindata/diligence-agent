@@ -6,7 +6,7 @@ from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
-from src.diligence_agent.schemas import Founders, CompetitiveLandscape, Market
+from src.diligence_agent.schemas import Founders, CompetitiveLandscape, Market, Product, WhyInteresting
 from src.diligence_agent.utils import extract_structured_output, get_schema_description, get_shared_playwright_tools
 import asyncio
 import os
@@ -20,6 +20,8 @@ def get_schema_for_section(section: str) -> Type[BaseModel]:
         "Founders": Founders,
         "Competitive Landscape": CompetitiveLandscape,
         "Market": Market,
+        "Product": Product,
+        "Why Interesting": WhyInteresting,
     }
     schema_class = schema_mapping.get(section)
     if not schema_class:
@@ -68,6 +70,7 @@ class ResearchState(BaseModel):
     company: str = ""
     questionnaire_data: dict = {}
     slack_data: str = ""
+    current_date: str = ""
     num_search_terms: int = 5
     num_websites: int = 10
 
@@ -83,7 +86,8 @@ class ResearchFlow(Flow[ResearchState]):
         schema_description = get_schema_description(schema_class)
 
         query = (
-            f"Perform thorough research on {self.state.section.lower()} for company {self.state.company}.\n\n"
+            f"Perform thorough research on {self.state.section.lower()} for company {self.state.company}.\n"
+            f"Current date: {self.state.current_date}\n\n"
             f"Your goal is to list {self.state.num_websites} websites that provide comprehensive information on the following topics:\n\n"
             f"{schema_description}\n\n"
             f"To do so, follow these steps:\n\n"
@@ -104,11 +108,13 @@ class ResearchFlow(Flow[ResearchState]):
         schema_description = get_schema_description(schema_class)
 
         query = (
-            f"Research {self.state.section.lower()} for company {self.state.company}.\n\n"
+            f"Research {self.state.section.lower()} for company {self.state.company}.\n"
+            f"Current date: {self.state.current_date}\n\n"
             f"You are given a list of relevant wesbites below:\n\n"
             f"{websites}\n\n"
             f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
             f"{schema_description}\n\n"
+            f"Ignore any websites that are invalid or do not provide useful information.\n\n"
         )
 
         result = await scraper_agent.kickoff_async(query, response_format=schema_class)

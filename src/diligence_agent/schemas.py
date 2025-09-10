@@ -56,28 +56,70 @@ class CompetitiveLandscape(BaseModel):
 
 
 class MarketSegment(BaseModel):
-    name: str
-    description: Optional[str] = None
-    size: Optional[str] = None  # e.g., "$10B in 2024"
-    growth_rate: Optional[str] = None  # e.g., "15% CAGR"
-    key_drivers: Optional[List[str]] = None
-    key_challenges: Optional[List[str]] = None
-    customer_types: Optional[List[str]] = None
+    name: str = Field(..., description="Name of the market segment, e.g., 'SMB SaaS', 'Healthcare AI'")
+    description: Optional[str] = Field(None, description="Brief description of the segment and its characteristics")
+    size: Optional[str] = Field(None, description="Estimated size of the segment, e.g., '$10B in 2024'")
+    growth_rate: Optional[str] = Field(None, description="Expected CAGR or annual growth rate")
+    key_drivers: Optional[List[str]] = Field(None, description="Main factors driving growth in this segment")
+    key_challenges: Optional[List[str]] = Field(None, description="Challenges or barriers in this segment")
+    customer_types: Optional[List[str]] = Field(None, description="Types of customers in this segment, e.g., enterprises, SMBs, governments")
+
 
 class Market(BaseModel):
-    total_addressable_market: Optional[str] = None  # e.g., "$50B globally"
-    serviceable_available_market: Optional[str] = None
-    serviceable_obtainable_market: Optional[str] = None
-    segments: Optional[List[MarketSegment]] = None
-    trends: Optional[List[str]] = None  # e.g., "increasing demand for generative AI"
-    risks: Optional[List[str]] = None  # e.g., "regulatory uncertainty"
-    major_geographies: Optional[List[str]] = None  # e.g., "US, Europe, APAC"
-    overall_summary: Optional[str] = None
+    total_addressable_market: Optional[str] = Field(None, description="Size of the global market opportunity (TAM)")
+    serviceable_available_market: Optional[str] = Field(None, description="Portion of TAM the company can serve (SAM)")
+    serviceable_obtainable_market: Optional[str] = Field(None, description="Realistic market share the company could capture (SOM)")
+    segments: Optional[List[MarketSegment]] = Field(None, description="Breakdown of key market segments")
+    trends: Optional[List[str]] = Field(None, description="Important market trends shaping the opportunity")
+    risks: Optional[List[str]] = Field(None, description="Risks or uncertainties affecting the market")
+    major_geographies: Optional[List[str]] = Field(None, description="Key regions or countries where the market is concentrated")
+    overall_summary: Optional[str] = Field(None, description="Concise narrative summarizing the market opportunity and dynamics")
+
+
+class ProductFeature(BaseModel):
+    name: str = Field(..., description="Name of the feature")
+    description: Optional[str] = Field(None, description="Brief description of what the feature does")
+    differentiation: Optional[str] = Field(None, description="How this feature stands out vs competitors")
+
+
+class Product(BaseModel):
+    name: Optional[str] = Field(None, description="Name of the product")
+    description: Optional[str] = Field(None, description="Overview of what the product is and does")
+    target_users: Optional[List[str]] = Field(None, description="Target personas or customer segments")
+    use_cases: Optional[List[str]] = Field(None, description="Key use cases the product enables")
+    features: Optional[List[ProductFeature]] = Field(None, description="List of main features with differentiation")
+    technology_stack: Optional[List[str]] = Field(None, description="Technologies used to build the product")
+    integrations: Optional[List[str]] = Field(None, description="3rd party systems the product integrates with")
+    pricing_model: Optional[str] = Field(None, description="Pricing structure, e.g., SaaS subscription, per-seat, usage-based")
+    distribution_channels: Optional[List[str]] = Field(None, description="Ways the product is distributed, e.g., direct sales, marketplace, resellers")
+    adoption_metrics: Optional[List[str]] = Field(None, description="Key adoption or traction numbers, e.g., users, customers, ARR")
+    roadmap: Optional[List[str]] = Field(None, description="Planned future features or directions")
+    intellectual_property: Optional[List[str]] = Field(None, description="Patents or proprietary assets")
+    website: Optional[str] = Field(None, description="Official website URL")
+    demo_or_docs: Optional[List[str]] = Field(None, description="Links to demo, product documentation, or videos")
+    overall_summary: Optional[str] = Field(None, description="Concise narrative summarizing the product and positioning")
+
+
+class WhyInteresting(BaseModel):
+    unique_insight: Optional[str] = Field(None, description="Proprietary or contrarian insight the founders bring")
+    team_strength: Optional[List[str]] = Field(None, description="Reasons why the team is exceptional, e.g., repeat founders, deep expertise")
+    timing_factors: Optional[List[str]] = Field(None, description="Why now is the right time, e.g., market shifts, regulation, enabling tech")
+    technology_moat: Optional[List[str]] = Field(None, description="Sources of defensibility, e.g., proprietary data, algorithms, IP")
+    early_signs_of_traction: Optional[List[str]] = Field(None, description="Initial customers, pilots, growth metrics, partnerships")
+    market_tailwinds: Optional[List[str]] = Field(None, description="Macro or industry trends driving demand")
+    scalability_potential: Optional[str] = Field(None, description="How the company can scale to capture a large TAM")
+    competitive_angle: Optional[str] = Field(None, description="How the company differentiates from incumbents or startups")
+    investor_fit: Optional[str] = Field(None, description="Why the startup aligns with an early-stage investor's thesis")
+    red_flags: Optional[List[str]] = Field(None, description="Risks or concerns that might offset the opportunity")
+    overall_summary: Optional[str] = Field(None, description="Concise narrative: why this company is interesting for investors")
 
 
 class ReportStructure(BaseModel):
-    #overview_section: str = ""
-    #product_section: str = "" 
-    founders_section: str = ""
-    competitive_landscape_section: str = ""
-    market_section: str = ""
+    overview_section: str = Field("", description="High-level overview of the company: what it does, stage, location, and core mission.")
+    product_section: str = Field("", description="Detailed description of the product or service: features, differentiation, technology stack, adoption, and roadmap.")
+    why_interesting_section: str = Field("", description="Analysis of why the company is compelling from an early-stage investment perspective: team, timing, traction, market tailwinds, and defensibility.")
+    founders_section: str = Field("", description="Profiles of the founders: background, track record, education, notable achievements, red flags, and links to professional profiles.")
+    competitive_landscape_section: str = Field("", description="Assessment of the competitive landscape: direct competitors, indirect competitors, substitutes, market positioning, and differentiation factors.")
+    market_section: str = Field("", description="Analysis of the market opportunity: TAM/SAM/SOM, key segments, trends, risks, customer types, and major geographies.")
+    conclusion_section: str = Field("", description="Final investment-oriented summary: key strengths, risks, and a recommendation or open questions for further diligence.")
+
