@@ -4,6 +4,7 @@ Utility functions for the diligence agent.
 
 import asyncio
 import json
+import os
 import re
 from typing import List, Any, Coroutine, Type, Optional
 from pydantic import BaseModel
@@ -18,7 +19,9 @@ async def execute_subflows_and_map_results(
     sections: List[str], 
     base_inputs: dict,
     report_structure,
-    parallel: bool = True
+    parallel: bool = True,
+    company_name: str = "",
+    output_dir: str = "reports"
 ) -> Any:
     """
     Execute multiple subflows and map results to report structure fields.
@@ -29,10 +32,15 @@ async def execute_subflows_and_map_results(
         base_inputs: Common inputs for all subflows
         report_structure: Report structure object to update
         parallel: Whether to execute in parallel or sequentially
+        company_name: Company name for file naming
+        output_dir: Directory to save individual section reports
         
     Returns:
         Updated report structure
     """
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Create coroutines for all flows
     coroutines = []
     for section_name in sections:
@@ -56,7 +64,16 @@ async def execute_subflows_and_map_results(
             field_name = get_field_for_section(section_name)
             # Set the appropriate field in report structure
             setattr(report_structure, field_name, markdown_content)
-            print(f"✅ {section_name} research completed and added to report")
+            
+            # Save individual section report to file using unified function
+            if markdown_content:
+                section_filepath = write_section_file(section_name, markdown_content, company_name)
+                if section_filepath:
+                    print(f"✅ {section_name} research completed and saved to {section_filepath}")
+                else:
+                    print(f"✅ {section_name} research completed (no content generated)")
+            else:
+                print(f"✅ {section_name} research completed (no content generated)")
 
     return report_structure
 
@@ -290,6 +307,55 @@ def fetch_slack_channel_data(channels: list) -> str:
         all_slack_content += channel_header + channel_content + "\n"
 
     return all_slack_content
+
+# =============================================================================
+# File Writing Utilities
+# =============================================================================
+
+# Define section ordering for consistent numbering
+SECTION_ORDER = {
+    "Company Overview": 1,
+    "Why Interesting": 2, 
+    "Product": 3,
+    "Competitive Landscape": 4,
+    "Market": 5,
+    "Founders": 6,
+    "Report Conclusion": 7,
+    "Final Report": 8,
+}
+
+def write_section_file(section_name: str, content: str, company_name: str, output_dir: str = "task_outputs") -> str:
+    """
+    Write a section report to a numbered file.
+    
+    Args:
+        section_name: Name of the section
+        content: Markdown content to write
+        company_name: Company name for directory structure
+        output_dir: Base output directory
+        
+    Returns:
+        File path where the content was saved
+    """
+    if not content or not content.strip():
+        return ""
+    
+    # Create company-specific directory
+    company_dir = os.path.join(output_dir, company_name)
+    os.makedirs(company_dir, exist_ok=True)
+    
+    # Get section number and format filename
+    section_number = SECTION_ORDER.get(section_name, 99)  # Default to 99 for unknown sections
+    section_filename = section_name.replace(' ', '_').lower()
+    filename = f"{section_number}.{section_filename}.md"
+    filepath = os.path.join(company_dir, filename)
+    
+    # Write file with section header
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(f"# {section_name} - {company_name}\n\n")
+        f.write(content)
+    
+    return filepath
 
 # =============================================================================
 # Other Utilities

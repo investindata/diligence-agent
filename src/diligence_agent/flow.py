@@ -12,7 +12,8 @@ from src.diligence_agent.agents import organizer_agent, writer_agent
 from src.diligence_agent.utils import (
     execute_subflows_and_map_results,
     extract_structured_output,
-    fetch_slack_channel_data)
+    fetch_slack_channel_data,
+    write_section_file)
 import os
 
 from opik.integrations.crewai import track_crewai
@@ -124,7 +125,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             research_sections,
             base_inputs,
             self.state.report_structure,
-            self.state.parallel_execution
+            self.state.parallel_execution,
+            self.state.company_name
         )
 
         print(f"🎉 All research flows completed! Report structure populated.")
@@ -155,7 +157,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             non_research_sections,
             base_inputs,
             self.state.report_structure,
-            self.state.parallel_execution
+            self.state.parallel_execution,
+            self.state.company_name
         )
 
         print(f"🎉 All non-research flows completed! Report structure populated.")
@@ -174,6 +177,13 @@ class DiligenceFlow(Flow[DiligenceState]):
 
         result = await writer_agent.kickoff_async(query)
         final_report = result.raw if hasattr(result, 'raw') else str(result)
+        
+        # Save final report using unified file writing function
+        if final_report:
+            final_report_filepath = write_section_file("Final Report", final_report, self.state.company_name)
+            if final_report_filepath:
+                print(f"🎉 Final report saved to {final_report_filepath}")
+        
         print(f"🎉 Report finalized!")
         return final_report
 
