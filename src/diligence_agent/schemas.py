@@ -10,11 +10,9 @@ class WorkExperience(BaseModel):
 class OrganizedData(BaseModel):
     data: dict = Field(..., description="Organized company data in structured JSON format")
 
-class FounderNames(BaseModel):
-    names: Annotated[List[str], Field(description="List of the full names of the company founders.")] = None
-
-class Founder(BaseModel):
+class FounderBackground(BaseModel):
     name: Annotated[str, Field(description="Full name of the founder")]
+    pronoumns: Annotated[Optional[str], Field(description="Pronoums used to address the founder")] = None
     role: Annotated[Optional[str], Field(description="Current role/title in the startup")] = None
     background: Annotated[Optional[str], Field(description="Narrative background summary")] = None
     education: Annotated[Optional[List[str]], Field(description="Education history")] = None
@@ -26,8 +24,8 @@ class Founder(BaseModel):
     other_profiles: Annotated[Optional[List[HttpUrl]], Field(description="Other relevant online profiles (GitHub, AngelList, etc.)")] = None
 
 
-class FoundersSection(BaseModel):
-    founders: Annotated[List[Founder], Field(description="List of all founders")]
+class Founders(BaseModel):
+    founders: Annotated[List[FounderBackground], Field(description="List of all founders")]
     overall_assessment: Annotated[Optional[str], Field(description="Synthesis of the founding team as a whole")] = None
     strengths: Annotated[Optional[List[str]], Field(description="Key strengths across the founding team")] = None
     risks: Annotated[Optional[List[str]], Field(description="Key risks across the founding team")] = None
@@ -75,3 +73,11 @@ class Market(BaseModel):
     risks: Optional[List[str]] = None  # e.g., "regulatory uncertainty"
     major_geographies: Optional[List[str]] = None  # e.g., "US, Europe, APAC"
     overall_summary: Optional[str] = None
+
+
+class ReportStructure(BaseModel):
+    #overview_section: str = ""
+    #product_section: str = "" 
+    founders_section: str = ""
+    competitive_landscape_section: str = ""
+    market_section: str = ""

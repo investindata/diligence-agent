@@ -57,7 +57,6 @@ def get_schema_description(schema_class: Type[BaseModel]) -> str:
         schema_fields.append(f"- {field_name}: {description}")
     return "\n".join(schema_fields)
 
-
 def extract_structured_output(result: Any, target_schema: Optional[Type[BaseModel]] = None):
     """
     Extract structured output from CrewAI result, cleaning if necessary.
@@ -244,3 +243,27 @@ def fetch_slack_channel_data(channels: list) -> str:
         all_slack_content += channel_header + channel_content + "\n"
 
     return all_slack_content
+
+# =============================================================================
+# Other Utilities
+# =============================================================================
+
+def join_names_with_and(name_list):
+    """
+    Joins a list of names with commas, and an 'and' before the last name.
+    Handles various list lengths.
+    """
+    if not name_list:
+        return ""
+    if len(name_list) == 1:
+        return name_list[0]
+
+    # Separate the last element from the rest
+    first_part = name_list[:-1]
+    last_name = name_list[-1]
+
+    # Join the first part with commas
+    comma_separated = ", ".join(first_part)
+
+    # Combine the two parts with " and "
+    return f"{comma_separated} and {last_name}"
