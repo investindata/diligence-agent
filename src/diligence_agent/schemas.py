@@ -113,13 +113,41 @@ class WhyInteresting(BaseModel):
     red_flags: Optional[List[str]] = Field(None, description="Risks or concerns that might offset the opportunity")
     overall_summary: Optional[str] = Field(None, description="Concise narrative: why this company is interesting for investors")
 
+class CompanyOverview(BaseModel):
+    name: str = Field(..., description="The official name of the company.")
+    location: Optional[str] = Field(None, description="Headquarters location (city, state, country).")
+    founding_year: Optional[int] = Field(None, description="Year the company was founded.")
+    stage: Optional[str] = Field(None, description="Company stage (e.g., pre-seed, seed, Series A, growth).")
+    mission: Optional[str] = Field(None, description="Short statement of the company's mission or vision.")
+    description: Optional[str] = Field(None, description="Brief overview of what the company does and its value proposition.")
+    key_milestones: Optional[list[str]] = Field(
+        None, description="List of notable milestones (e.g., product launches, funding rounds, partnerships)."
+    )
+
+class ReportConclusion(BaseModel):
+    key_strengths: list[str] = Field(
+        ..., description="List of the company's most compelling strengths (e.g., strong founding team, differentiated technology)."
+    )
+    key_risks: list[str] = Field(
+        ..., description="List of risks or concerns (e.g., competitive pressure, regulatory uncertainty, unclear business model)."
+    )
+    investment_thesis: Optional[str] = Field(
+        None, description="Summary of why this company is interesting or not as an investment opportunity."
+    )
+    open_questions: Optional[list[str]] = Field(
+        None, description="Outstanding questions or areas requiring further diligence before making an investment decision."
+    )
+    recommendation: Optional[str] = Field(
+        None, description="Overall recommendation (e.g., proceed with diligence, pass, or monitor)."
+    )
+
 
 class ReportStructure(BaseModel):
-    overview_section: str = Field("", description="High-level overview of the company: what it does, stage, location, and core mission.")
+    company_overview_section: str = Field("", description="High-level overview of the company: what it does, stage, location, and core mission.")
     product_section: str = Field("", description="Detailed description of the product or service: features, differentiation, technology stack, adoption, and roadmap.")
     why_interesting_section: str = Field("", description="Analysis of why the company is compelling from an early-stage investment perspective: team, timing, traction, market tailwinds, and defensibility.")
     founders_section: str = Field("", description="Profiles of the founders: background, track record, education, notable achievements, red flags, and links to professional profiles.")
     competitive_landscape_section: str = Field("", description="Assessment of the competitive landscape: direct competitors, indirect competitors, substitutes, market positioning, and differentiation factors.")
     market_section: str = Field("", description="Analysis of the market opportunity: TAM/SAM/SOM, key segments, trends, risks, customer types, and major geographies.")
-    conclusion_section: str = Field("", description="Final investment-oriented summary: key strengths, risks, and a recommendation or open questions for further diligence.")
+    report_conclusion_section: str = Field("", description="Final investment-oriented summary: key strengths, risks, and a recommendation or open questions for further diligence.")
 

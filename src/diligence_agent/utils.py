@@ -13,6 +13,53 @@ from pydantic import BaseModel
 # Async Execution Utilities
 # =============================================================================
 
+async def execute_subflows_and_map_results(
+    subflow_class,
+    sections: List[str], 
+    base_inputs: dict,
+    report_structure,
+    parallel: bool = True
+) -> Any:
+    """
+    Execute multiple subflows and map results to report structure fields.
+    
+    Args:
+        subflow_class: The Flow class to instantiate for each section
+        sections: List of section names to process
+        base_inputs: Common inputs for all subflows
+        report_structure: Report structure object to update
+        parallel: Whether to execute in parallel or sequentially
+        
+    Returns:
+        Updated report structure
+    """
+    # Create coroutines for all flows
+    coroutines = []
+    for section_name in sections:
+        subflow = subflow_class()
+        coroutines.append(subflow.kickoff_async(
+            inputs={
+                **base_inputs,
+                "section": section_name,
+            }
+        ))
+
+    # Execute using our central utility function with unified tracing
+    results = await execute_coroutines(coroutines, parallel=parallel)
+
+    # Map results to appropriate report structure fields using centralized mapping
+    for i, section_name in enumerate(sections):
+        if i < len(results):
+            # Extract markdown content from result
+            markdown_content = str(results[i]) if results[i] else ""
+            # Get field name from centralized mapping
+            field_name = get_field_for_section(section_name)
+            # Set the appropriate field in report structure
+            setattr(report_structure, field_name, markdown_content)
+            print(f"✅ {section_name} research completed and added to report")
+
+    return report_structure
+
 async def execute_coroutines(coroutines: List[Coroutine], parallel: bool = True) -> List[Any]:
     """
     Execute a list of coroutines either in parallel or sequentially with unified tracing.
@@ -267,3 +314,53 @@ def join_names_with_and(name_list):
 
     # Combine the two parts with " and "
     return f"{comma_separated} and {last_name}"
+
+
+
+# Centralized section configuration
+from src.diligence_agent.schemas import Founders, CompetitiveLandscape, Market, Product, WhyInteresting, CompanyOverview, ReportConclusion
+
+SECTION_CONFIG = {
+    "Founders": {
+        "schema": Founders,
+        "field": "founders_section"
+    },
+    "Competitive Landscape": {
+        "schema": CompetitiveLandscape,
+        "field": "competitive_landscape_section"
+    },
+    "Market": {
+        "schema": Market,
+        "field": "market_section"
+    },
+    "Product": {
+        "schema": Product,
+        "field": "product_section"
+    },
+    "Why Interesting": {
+        "schema": WhyInteresting,
+        "field": "why_interesting_section"
+    },
+    "Company Overview": {
+        "schema": CompanyOverview,
+        "field": "company_overview_section"
+    },
+    "Report Conclusion": {
+        "schema": ReportConclusion,
+        "field": "report_conclusion_section"
+    },
+}
+
+def get_schema_for_section(section: str) -> Type[BaseModel]:
+    """Get schema class for dynamic schema selection without global state."""
+    config = SECTION_CONFIG.get(section)
+    if not config:
+        raise ValueError(f"Unknown section: {section}")
+    return config["schema"]
+
+def get_field_for_section(section: str) -> str:
+    """Get report structure field name for a section."""
+    config = SECTION_CONFIG.get(section)
+    if not config:
+        raise ValueError(f"Unknown section: {section}")
+    return config["field"]  

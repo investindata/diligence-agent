@@ -1,69 +1,13 @@
 from pydantic import BaseModel
-from typing import Type, Any
-from crewai import Agent
-from crewai.llm import LLM
+from typing import Any
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
-from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
-from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
-from src.diligence_agent.schemas import Founders, CompetitiveLandscape, Market, Product, WhyInteresting
-from src.diligence_agent.utils import extract_structured_output, get_schema_description, get_shared_playwright_tools
+from src.diligence_agent.utils import extract_structured_output, get_schema_description, get_schema_for_section, get_shared_playwright_tools
+from src.diligence_agent.agents import search_agent, scraper_agent, writer_agent
 import asyncio
-import os
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
 
-
-def get_schema_for_section(section: str) -> Type[BaseModel]:
-    """Get schema class for dynamic schema selection without global state."""
-    schema_mapping = {
-        "Founders": Founders,
-        "Competitive Landscape": CompetitiveLandscape,
-        "Market": Market,
-        "Product": Product,
-        "Why Interesting": WhyInteresting,
-    }
-    schema_class = schema_mapping.get(section)
-    if not schema_class:
-        raise ValueError(f"Unknown section: {section}")
-    return schema_class  
-
-
-# Define LLM
-llm = LLM(
-    model="gpt-4.1-mini",
-    api_key=os.getenv("OPENAI_API_KEY"),
-    temperature=0.0,
-)
-
-search_agent = Agent(
-    role="Web Search Researcher",
-    goal="Search the web for valuable information about a topic.",
-    backstory="You are an excellent researcher who can search the web using Serper.",
-    verbose=True,
-    llm=llm,
-    max_iter=8,
-    tools=[SerperDevTool()],
-)
-
-scraper_agent = Agent(
-    role="Web Scraper Researcher",
-    goal="Scrape the web for valuable information about a topic using both search engines and browser automation.",
-    backstory="You are an excellent researcher who can navigate websites using Playwright for thorough information gathering.",
-    verbose=True,
-    llm=llm,
-    max_iter=15,
-    tools=[SerperScrapeWebsiteTool()]
-)
-
-writer_agent = Agent(
-    role="Writer",
-    goal="Synthesize and write a comprehensive report based on gathered research.",
-    backstory="You are an expert writer who can create clear, concise, and well-structured reports.",
-    verbose=True,
-    llm=llm,
-    max_iter=5,
-)
 
 class ResearchState(BaseModel):
     section: str = ""
