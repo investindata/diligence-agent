@@ -13,7 +13,8 @@ from src.diligence_agent.utils import (
     execute_subflows_and_map_results,
     extract_structured_output,
     fetch_slack_channel_data,
-    write_section_file)
+    write_section_file,
+    clean_markdown_output)
 import os
 
 from opik.integrations.crewai import track_crewai
@@ -124,17 +125,18 @@ class DiligenceFlow(Flow[DiligenceState]):
             research_sections,
             base_inputs,
             self.state.report_structure,
-            self.state.company_name
+            self.state.company_name,
+            self.state.current_date
         )
 
-        print(f"🎉 All research flows completed! Report structure populated.")
+        print(f"✅ Research flows completed")
         return self.state.report_structure
     
     @listen(run_research_flows)
     async def run_non_research_flows(self, report_structure: ReportStructure) -> ReportStructure:
         """Write remaining sections of the report that are not covered by research flows"""
-        if self.state.skip_method and report_structure.company_overview_section and report_structure.why_interesting_section:
-            return report_structure
+        #if self.state.skip_method and report_structure.company_overview_section and report_structure.why_interesting_section and report_structure.report_conclusion_section:
+        #    return report_structure
         
          # Define common inputs for all research flows
         base_inputs = {
@@ -155,10 +157,11 @@ class DiligenceFlow(Flow[DiligenceState]):
             non_research_sections,
             base_inputs,
             self.state.report_structure,
-            self.state.company_name
+            self.state.company_name,
+            self.state.current_date
         )
 
-        print(f"🎉 All non-research flows completed! Report structure populated.")
+        print(f"✅ Non-research flows completed")
         return self.state.report_structure
     
     @listen(run_non_research_flows)
@@ -168,20 +171,20 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"You are given the following structured report about company {self.state.company_name}:\n\n"
             f"{report_structure}\n\n"
             f"Using this data, write a comprehensive and well-structured investment report.\n\n"
-            f"Ensure clarity, conciseness, and coherence in your writing. "
+            f"Ensure clarity, conciseness, and coherence in your writing. Eliminate redundancies and ensure a smooth flow between sections."
             f"Return an output in Markdown format."
         )
 
         result = await writer_agent.kickoff_async(query)
-        final_report = result.raw if hasattr(result, 'raw') else str(result)
+        raw_final_report = result.raw if hasattr(result, 'raw') else str(result)
+        final_report = clean_markdown_output(raw_final_report)
         
         # Save final report using unified file writing function
         if final_report:
-            final_report_filepath = write_section_file("Final Report", final_report, self.state.company_name)
+            final_report_filepath = write_section_file("Final Report", final_report, self.state.company_name, self.state.current_date)
             if final_report_filepath:
-                print(f"🎉 Final report saved to {final_report_filepath}")
+                print(f"✅ Final report completed")
         
-        print(f"🎉 Report finalized!")
         return final_report
 
 

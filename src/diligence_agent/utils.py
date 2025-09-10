@@ -19,7 +19,8 @@ async def execute_subflows_and_map_results(
     sections: List[str], 
     base_inputs: dict,
     report_structure,
-    company_name: str = ""
+    company_name: str = "",
+    current_date: str = ""
 ) -> Any:
     """
     Execute multiple subflows in parallel and map results to report structure fields.
@@ -51,8 +52,9 @@ async def execute_subflows_and_map_results(
     # Map results to appropriate report structure fields using centralized mapping
     for i, section_name in enumerate(sections):
         if i < len(results):
-            # Extract markdown content from result
-            markdown_content = str(results[i]) if results[i] else ""
+            # Extract and clean markdown content from result
+            raw_content = str(results[i]) if results[i] else ""
+            markdown_content = clean_markdown_output(raw_content)
             # Get field name from centralized mapping
             field_name = get_field_for_section(section_name)
             # Set the appropriate field in report structure
@@ -60,13 +62,13 @@ async def execute_subflows_and_map_results(
             
             # Save individual section report to file using unified function
             if markdown_content:
-                section_filepath = write_section_file(section_name, markdown_content, company_name)
+                section_filepath = write_section_file(section_name, markdown_content, company_name, current_date)
                 if section_filepath:
-                    print(f"✅ {section_name} research completed and saved to {section_filepath}")
+                    print(f"✅ {section_name} completed")
                 else:
-                    print(f"✅ {section_name} research completed (no content generated)")
+                    print(f"✅ {section_name} completed (no content)")
             else:
-                print(f"✅ {section_name} research completed (no content generated)")
+                print(f"✅ {section_name} completed (no content)")
 
     return report_structure
 
@@ -134,23 +136,43 @@ def extract_structured_output(result: Any, target_schema: Optional[Type[BaseMode
         else:
             return parsed_data
     except json.JSONDecodeError as e:
-        schema_name = target_schema.__name__ if target_schema else "JSON"
-        print(f"Warning: Could not parse JSON for {schema_name}: {e}")
-        print(f"Raw output was: {repr(raw_output)}")
         # Return empty instance instead of raising error
         if target_schema:
             return target_schema()
         else:
             return {}
     except Exception as e:
-        schema_name = target_schema.__name__ if target_schema else "JSON"
-        print(f"Warning: Could not validate {schema_name} schema: {e}")
         # Return empty instance instead of raising error
         if target_schema:
             return target_schema()
         else:
             return {}
 
+
+def clean_markdown_output(content: str) -> str:
+    """
+    Clean markdown output by removing code block markers and horizontal rules.
+    
+    Args:
+        content: Raw markdown content that may contain ```markdown blocks and horizontal rules
+        
+    Returns:
+        Cleaned markdown content
+    """
+    if not content:
+        return content
+    
+    # Remove markdown code blocks (```markdown at start, ``` at end)
+    cleaned = re.sub(r'^```markdown\s*\n?', '', content.strip(), flags=re.MULTILINE)
+    cleaned = re.sub(r'\n?```\s*$', '', cleaned, flags=re.MULTILINE)
+    
+    # Remove horizontal rules (--- or ***) 
+    cleaned = re.sub(r'^[-*]{3,}\s*$', '', cleaned, flags=re.MULTILINE)
+    
+    # Clean up extra blank lines that may result from removing horizontal rules
+    cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned)
+    
+    return cleaned.strip()
 
 def validate_json_output(output_text: str) -> tuple[bool, str]:
     """
@@ -309,14 +331,15 @@ SECTION_ORDER = {
     "Final Report": 8,
 }
 
-def write_section_file(section_name: str, content: str, company_name: str, output_dir: str = "task_outputs") -> str:
+def write_section_file(section_name: str, content: str, company_name: str, current_date: str = "", output_dir: str = "task_outputs") -> str:
     """
-    Write a section report to a numbered file.
+    Write a section report to a numbered file with metadata header.
     
     Args:
         section_name: Name of the section
         content: Markdown content to write
         company_name: Company name for directory structure
+        current_date: Date when the report was generated
         output_dir: Base output directory
         
     Returns:
@@ -335,9 +358,15 @@ def write_section_file(section_name: str, content: str, company_name: str, outpu
     filename = f"{section_number}.{section_filename}.md"
     filepath = os.path.join(company_dir, filename)
     
-    # Write file with section header
+    # Write file with metadata header and section content
     with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(f"# {section_name} - {company_name}\n\n")
+        # Write metadata header
+        
+        f.write(f"**Company:** {company_name}  \n")
+        f.write(f"**Section:** {section_name}  \n")
+        f.write(f"**Generated:** {current_date}  \n")
+        
+        # Write the actual content
         f.write(content)
     
     return filepath
