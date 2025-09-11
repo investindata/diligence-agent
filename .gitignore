@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 report.md
 src/diligence_agent/config/tasks.yaml
+cache/
 
 # Output files
 output/
