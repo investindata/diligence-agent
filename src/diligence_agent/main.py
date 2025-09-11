@@ -3,6 +3,10 @@ import sys
 import warnings
 import argparse
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv(override=True)
 
 # Suppress all warnings before imports to keep output clean
 warnings.filterwarnings("ignore")

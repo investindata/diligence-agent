@@ -7,6 +7,24 @@ import sys
 import os
 from pathlib import Path
 
+# Load environment variables from .env file
+def load_env_variables():
+    """Load environment variables from .env file"""
+    env_path = Path('.env')
+    if env_path.exists():
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+
+load_env_variables()
+
+# Also use dotenv for better compatibility
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 # Add the src directory to the path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 

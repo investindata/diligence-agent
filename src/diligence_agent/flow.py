@@ -1,11 +1,11 @@
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 import asyncio
-from src.diligence_agent.schemas import ReportStructure
+from src.diligence_agent.schemas import ReportStructure, DataSources
 from src.diligence_agent.research_flow import ResearchFlow
 from src.diligence_agent.non_research_flow import NonResearchFlow
 from src.diligence_agent.agents import organizer_agent, writer_agent
@@ -14,8 +14,16 @@ from src.diligence_agent.utils import (
     extract_structured_output,
     fetch_slack_channel_data,
     write_section_file,
-    clean_markdown_output)
+    clean_markdown_output,
+    write_parsed_data_sources
+)
 import os
+
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv(override=True)
+
 
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
@@ -34,11 +42,16 @@ class DiligenceState(BaseModel):
     num_search_terms: int = 5
     num_websites: int = 10
 
-    # questionnaire organizer flow
-    questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
-    questionnaire_data: dict = {}
-    slack_data: str = ""
-
+    # data sources organizer flow
+    data_sources_file: str = "https://docs.google.com/document/d/1TZEg-gljazGMUuG1KWKoNc3PDHMGLahD5ofd1BoBWR8/edit?usp=sharing"
+    data_sources: DataSources = DataSources(
+        google_docs=[],
+        pdfs=[],
+        websites=[],
+        slack_channels=[]
+    )
+    parsed_data_sources: Dict[str, str] = {}
+    
     # research report structure
     report_structure: ReportStructure = ReportStructure(
         company_overview_section="",
@@ -50,58 +63,103 @@ class DiligenceState(BaseModel):
         report_conclusion_section=""
     )
 
-    # slack organizer flow
-    slack_channels: list = [{"name": "diligence_tensorstax", "id":"C09AE80U8C8","description": "Dedicated channel for TensorStax due diligence discussions."},
-                            {"name": "q32025", "id": "C09750Z9HQ8", "description": "Channel for group discussions about companies, including TensorStax."},]
-
+    
 
 @persist(verbose=True)
 class DiligenceFlow(Flow[DiligenceState]):
 
     @start()
-    async def organize_questionnaire_data(self) -> Dict[str, Any]:
-        """Create a Google Doc processing task"""
-        if self.state.skip_method and self.state.questionnaire_data:
-            return self.state.questionnaire_data
+    async def get_data_sources(self) -> DataSources:
+        """Parse Google Doc containing data sources and return structured DataSources schema"""
+        if self.state.skip_method and self.state.data_sources.google_docs:
+            return self.state.data_sources
         
-        # retrieve raw content from Google Docs
+        # Retrieve raw content from Google Doc
         google_doc_processor = GoogleDocProcessor()
-        raw_questionnaire_data = google_doc_processor._run(self.state.questionaire_url).strip()
-
-        query = (
-            f"Process and extract data from Google Docs about company {self.state.company_name}.\n"
-            f"Below is the raw content from the Google Docs:\n\n"
-            f"{raw_questionnaire_data}\n\n"
-            f"Current date: {self.state.current_date}\n"
-            f"Organize this data into a structured JSON format by question and answer. Be thorough and include all relevant details.\n"
-        )
-        result = await organizer_agent.kickoff_async(query)
-        extracted_data = extract_structured_output(result)
-        self.state.questionnaire_data = extracted_data if isinstance(extracted_data, dict) else {}
-        return self.state.questionnaire_data
-
-    @listen(organize_questionnaire_data)
-    async def organize_slack_data(self) -> str:
-        """Organize Slack data"""
-        if self.state.skip_method and self.state.slack_data:
-            return self.state.slack_data
+        raw_data_sources = google_doc_processor._run(self.state.data_sources_file).strip()
+        print(f"📄 Raw data sources content (length: {len(raw_data_sources)}):")
+        print("=" * 80)
+        print(raw_data_sources)
+        print("=" * 80)
         
-        raw_slack_content = fetch_slack_channel_data(self.state.slack_channels)
-
         query = (
-            f"Process and extract data from Slack channels about company {self.state.company_name}.\n"
-            f"Below is the raw content from Slack:\n\n"
-            f"{raw_slack_content}\n\n"
-            f"Current date: {self.state.current_date}\n"
-            f"Organize this data into a human readable markdown format. Be thorough and include all relevant details about this company.\n"
+            f"Parse the following Google Doc content and extract data sources for company {self.state.company_name}.\n\n"
+            f"Raw content:\n{raw_data_sources}\n\n"
+            f"Extract and organize the data sources into the required structure.\n"
         )
-        result = await organizer_agent.kickoff_async(query)
-        # Extract string content from agent result
-        self.state.slack_data = result.raw if hasattr(result, 'raw') else str(result)
-        return self.state.slack_data
+        
+        result = await organizer_agent.kickoff_async(query, response_format=DataSources)
+        # extract_structured_output returns DataSources instance when target_schema is provided
+        return extract_structured_output(result, DataSources)  # type: ignore
 
-    @listen(organize_slack_data)
-    async def run_research_flows(self) -> ReportStructure:
+
+    @listen(get_data_sources)
+    async def parse_data_sources(self, data_sources: DataSources) -> Dict[str, str]:
+        """Parse individual data sources and return markdown content for each"""
+        if self.state.skip_method and self.state.parsed_data_sources:
+            return self.state.parsed_data_sources
+        
+        print("Data sources to parse:", data_sources)
+        
+        parsed_sources = {}
+        
+        # Helper function to process any source
+        async def process_source(source_name: str, raw_content: str) -> str:
+            query = (
+                f"Clean and organize the following content into well-structured markdown.\n\n"
+                f"Source: {source_name}\n"
+                f"Raw content:\n{raw_content}\n\n"
+                f"Return clean, well-formatted markdown content."
+            )
+            result = await organizer_agent.kickoff_async(query)
+            return clean_markdown_output(result.raw if hasattr(result, 'raw') else str(result))
+        
+        # Process Google Docs
+        if data_sources.google_docs:
+            print(f"📄 Processing {len(data_sources.google_docs)} Google Doc(s)...")
+            google_doc_processor = GoogleDocProcessor()
+            for i, doc_url in enumerate(data_sources.google_docs):
+                print(f"  📄 Processing Google Doc {i+1}/{len(data_sources.google_docs)}: {doc_url}")
+                raw_content = google_doc_processor._run(doc_url).strip()
+                parsed_sources[f"Google Doc {i+1}"] = await process_source(f"Google Doc {i+1}", raw_content)
+                print(f"  ✅ Google Doc {i+1} processed ({len(raw_content)} chars)")
+        else:
+            print("📄 No Google Docs to process")
+        
+        # Process Websites
+        if data_sources.websites:
+            print(f"🌐 Processing {len(data_sources.websites)} website(s)...")
+            from src.diligence_agent.tools.cached_serper_tools import cached_serper_scraper
+            for i, website_url in enumerate(data_sources.websites):
+                print(f"  🌐 Processing website {i+1}/{len(data_sources.websites)}: {website_url}")
+                raw_content = cached_serper_scraper._run(url=website_url)
+                parsed_sources[f"Website: {website_url}"] = await process_source(f"Website: {website_url}", raw_content)
+                print(f"  ✅ Website {i+1} processed ({len(raw_content)} chars)")
+        else:
+            print("🌐 No websites to process")
+        
+        # Process Slack Channels
+        if data_sources.slack_channels:
+            print(f"💬 Processing {len(data_sources.slack_channels)} Slack channel(s)...")
+            for i, channel_id in enumerate(data_sources.slack_channels):
+                print(f"  💬 Processing Slack channel {i+1}/{len(data_sources.slack_channels)}: {channel_id}")
+                # Create channel dict with minimal info for fetch_slack_channel_data
+                channel_info = {"id": channel_id, "name": channel_id, "description": ""}
+                raw_content = fetch_slack_channel_data([channel_info])
+                parsed_sources[f"Slack: {channel_id}"] = await process_source(f"Slack: {channel_id}", raw_content)
+                print(f"  ✅ Slack channel {i+1} processed ({len(raw_content)} chars)")
+        else:
+            print("💬 No Slack channels to process")
+        
+        # Update state and write parsed data sources to files
+        self.state.parsed_data_sources = parsed_sources
+        write_parsed_data_sources(parsed_sources, self.state.company_name, self.state.current_date)
+        return parsed_sources
+
+
+
+    @listen(parse_data_sources)
+    async def run_research_flows(self, parsed_data_sources: Dict[str, str]) -> ReportStructure:
 
         #if self.state.skip_method and self.state.report_structure:
         #    return self.state.report_structure
@@ -109,8 +167,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         # Define common inputs for all research flows
         base_inputs = {
             "company": self.state.company_name,
-            "questionnaire_data": self.state.questionnaire_data,
-            "slack_data": self.state.slack_data,
+            "parsed_data_sources": parsed_data_sources,
             "current_date": self.state.current_date,
             "num_search_terms": self.state.num_search_terms,
             "num_websites": self.state.num_websites,
@@ -141,7 +198,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.report_structure
     
     @listen(run_research_flows)
-    async def run_non_research_flows(self, report_structure: ReportStructure) -> ReportStructure:
+    async def run_non_research_flows(self) -> ReportStructure:
         """Write remaining sections of the report that are not covered by research flows"""
         #if self.state.skip_method and report_structure.company_overview_section and report_structure.why_interesting_section and report_structure.report_conclusion_section:
         #    return report_structure

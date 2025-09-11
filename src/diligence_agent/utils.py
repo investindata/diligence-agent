@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import re
-from typing import List, Any, Coroutine, Type, Optional
+from typing import List, Any, Coroutine, Type, Optional, Dict
 from pydantic import BaseModel
 
 
@@ -323,7 +323,7 @@ def fetch_slack_channel_data(channels: list) -> str:
                     # Use the MCP tool to fetch channel messages with correct parameter format
                     result = history_tool._run(
                         channel_id=channel['id'],
-                        limit=500
+                        limit=2000
                     )
                     channel_content = f"Messages from {channel['name']}:\n{result}\n"
                 else:
@@ -354,6 +354,13 @@ SECTION_ORDER = {
     "Report Conclusion": 7,
     "Final Report": 8,
 }
+
+def write_parsed_data_sources(parsed_sources: Dict[str, str], company_name: str, current_date: str = "", output_dir: str = "task_outputs") -> None:
+    """Write parsed data sources to individual files."""
+    for source_name, markdown_content in parsed_sources.items():
+        # Clean source name for filename
+        safe_filename = source_name.replace(":", "").replace("/", "_").replace(" ", "_")
+        write_section_file(f"Data_Source_{safe_filename}", markdown_content, company_name, current_date, output_dir)
 
 def write_section_file(section_name: str, content: str, company_name: str, current_date: str = "", output_dir: str = "task_outputs") -> str:
     """

@@ -151,3 +151,11 @@ class ReportStructure(BaseModel):
     market_section: str = Field("", description="Analysis of the market opportunity: TAM/SAM/SOM, key segments, trends, risks, customer types, and major geographies.")
     report_conclusion_section: str = Field("", description="Final investment-oriented summary: key strengths, risks, and a recommendation or open questions for further diligence.")
 
+
+class DataSources(BaseModel):
+    google_docs: List[str] = Field([], description="List of Google Doc URLs used as data sources for the report")
+    pdfs: List[str] = Field([], description="List of PDF URLs used as data sources for the report")
+    websites: List[str] = Field([], description="List of website URLs used as data sources")
+    slack_channels: List[str] = Field([], description="List of Slack channel IDs used as data sources")
+
+

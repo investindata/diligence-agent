@@ -6,6 +6,10 @@ from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from src.diligence_agent.mcp_config import get_slack_tools
 from crewai.llm import LLM
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv(override=True)
 
 # Default configuration
 AVAILABLE_MODELS = ["gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"]
