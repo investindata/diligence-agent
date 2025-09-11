@@ -152,7 +152,28 @@ class GoogleDocProcessor(BaseTool):
                 if 'elements' in paragraph:
                     for elem in paragraph['elements']:
                         if 'textRun' in elem:
-                            text_parts.append(elem['textRun'].get('content', ''))
+                            text_run = elem['textRun']
+                            content_text = text_run.get('content', '')
+                            
+                            # Check if this text run has a hyperlink
+                            text_style = text_run.get('textStyle', {})
+                            if 'link' in text_style and 'url' in text_style['link']:
+                                # Add both the display text and the actual URL
+                                url = text_style['link']['url']
+                                text_parts.append(f"{content_text} [{url}]")
+                            else:
+                                text_parts.append(content_text)
+                        elif 'richLink' in elem:
+                            rich_link = elem['richLink']
+                            
+                            # Extract URL from richLink
+                            url = rich_link.get('richLinkProperties', {}).get('uri', '')
+                            
+                            # Extract display text (title) from richLink
+                            title = rich_link.get('richLinkProperties', {}).get('title', '')
+                            
+                            text_parts.append(f"{title} [{url}]")
+                                
             elif 'table' in element:
                 # Handle tables
                 table = element['table']
