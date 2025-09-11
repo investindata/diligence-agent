@@ -103,8 +103,8 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(organize_slack_data)
     async def run_research_flows(self) -> ReportStructure:
 
-        if self.state.skip_method and self.state.report_structure:
-            return self.state.report_structure
+        #if self.state.skip_method and self.state.report_structure:
+        #    return self.state.report_structure
         
         # Define common inputs for all research flows
         base_inputs = {
@@ -198,7 +198,14 @@ class DiligenceFlow(Flow[DiligenceState]):
         return final_report
 
 
-async def kickoff() -> Any:
+async def kickoff(clear_cache: bool = False) -> Any:
+    # Clear cache if requested
+    if clear_cache:
+        from src.diligence_agent.tools.cached_serper_tools import cached_serper_search, cached_serper_scraper
+        cached_serper_search.clear_cache()
+        cached_serper_scraper.clear_cache()
+        print("🗑️ Cache cleared")
+    
     diligence_flow = DiligenceFlow()
     result = await diligence_flow.kickoff_async(
         inputs={
@@ -212,8 +219,14 @@ async def kickoff() -> Any:
     return result
 
 
-async def kickoff_task(flow_id: Optional[str] = None) -> Any:
+async def kickoff_task(flow_id: Optional[str] = None, clear_cache: bool = False) -> Any:
     """Run a single task of the flow with persistent state."""
+    # Clear cache if requested
+    if clear_cache:
+        from src.diligence_agent.tools.cached_serper_tools import cached_serper_search, cached_serper_scraper
+        cached_serper_search.clear_cache()
+        cached_serper_scraper.clear_cache()
+        print("🗑️ Cache cleared")
 
     diligence_flow = DiligenceFlow()
 

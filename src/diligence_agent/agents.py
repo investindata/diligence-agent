@@ -1,6 +1,6 @@
 from crewai import Agent
 from crewai.llm import LLM
-from crewai_tools import SerperDevTool, SerperScrapeWebsiteTool
+from src.diligence_agent.tools.cached_serper_tools import CachedSerperDevTool, CachedSerperScrapeWebsiteTool
 from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 
 
@@ -35,21 +35,21 @@ organizer_agent = Agent(
 search_agent = Agent(
     role="Web Search Researcher",
     goal="Search the web for valuable information about a topic.",
-    backstory="You are an excellent researcher who can search the web using Serper.",
+    backstory="You are an excellent researcher who can search the web using Serper with caching.",
     verbose=False,
     llm=llm,
     max_iter=8,
-    tools=[SerperDevTool()],
+    tools=[CachedSerperDevTool()],
 )
 
 scraper_agent = Agent(
     role="Web Scraper Researcher",
     goal="Scrape the web for valuable information about a topic using both search engines and browser automation.",
-    backstory="You are an excellent researcher who can navigate websites using Playwright for thorough information gathering.",
+    backstory="You are an excellent researcher who can navigate websites using Playwright with caching for thorough information gathering.",
     verbose=False,
     llm=llm,
     max_iter=15,
-    tools=[SerperScrapeWebsiteTool()]
+    tools=[CachedSerperScrapeWebsiteTool()]
 )
 
 writer_agent = Agent(
