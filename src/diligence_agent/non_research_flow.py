@@ -36,6 +36,7 @@ class NonResearchFlow(Flow[NonResearchState]):
             f"{self.state.report_structure}\n\n"
             f"Using this data, write a comprehensive and well-structured {self.state.section} section for the investment report.\n\n"
             f"Ensure clarity and coherence in your writing.\n\n"
+            f"Be thorough and don't omit any details.\n\n"
         )
     
         result = await writer_agent.kickoff_async(query, response_format=schema_class)
@@ -51,6 +52,7 @@ class NonResearchFlow(Flow[NonResearchState]):
             f"{composed_data}\n\n"
             f"Using this data, write a comprehensive and well-structured section for the investment report.\n\n"
             f"Ensure clarity and coherence in your writing.\n\n"
+            f"Be thorough and don't omit any details.\n\n"
         )
 
         result = await writer_agent.kickoff_async(query)

@@ -360,9 +360,9 @@ def write_parsed_data_sources(parsed_sources: Dict[str, str], company_name: str,
     for source_name, markdown_content in parsed_sources.items():
         # Clean source name for filename
         safe_filename = source_name.replace(":", "").replace("/", "_").replace(" ", "_")
-        write_section_file(f"Data_Source_{safe_filename}", markdown_content, company_name, current_date, output_dir)
+        write_section_file(f"Data_Source_{safe_filename}", markdown_content, company_name, current_date, output_dir, skip_numbering=True)
 
-def write_section_file(section_name: str, content: str, company_name: str, current_date: str = "", output_dir: str = "task_outputs") -> str:
+def write_section_file(section_name: str, content: str, company_name: str, current_date: str = "", output_dir: str = "task_outputs", skip_numbering: bool = False) -> str:
     """
     Write a section report to a numbered file with metadata header.
     
@@ -388,10 +388,13 @@ def write_section_file(section_name: str, content: str, company_name: str, curre
         os.makedirs(company_dir, exist_ok=True)
         print(f"📁 Using directory: {company_dir}")
         
-        # Get section number and format filename
-        section_number = SECTION_ORDER.get(section_name, 99)  # Default to 99 for unknown sections
+        # Format filename with or without numbering
         section_filename = section_name.replace(' ', '_').lower()
-        filename = f"{section_number}.{section_filename}.md"
+        if skip_numbering:
+            filename = f"{section_filename}.md"
+        else:
+            section_number = SECTION_ORDER.get(section_name, 99)  # Default to 99 for unknown sections
+            filename = f"{section_number}.{section_filename}.md"
         filepath = os.path.join(company_dir, filename)
         print(f"💾 Writing to: {filepath}")
         

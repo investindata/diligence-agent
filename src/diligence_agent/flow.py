@@ -106,7 +106,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         # Helper function to process any source
         async def process_source(source_name: str, raw_content: str) -> str:
             query = (
-                f"Clean and organize the following content into well-structured markdown.\n\n"
+                f"Clean and organize the following content into well-structured markdown in human readable format.\n\n"
                 f"Source: {source_name}\n"
                 f"Raw content:\n{raw_content}\n\n"
                 f"Return clean, well-formatted markdown content."
@@ -238,7 +238,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"You are given the following structured report about company {self.state.company_name}:\n\n"
             f"{report_structure}\n\n"
             f"Using this data, write a comprehensive and well-structured investment report.\n\n"
-            f"Ensure clarity and coherence in your writing. Eliminate redundancies and ensure a smooth flow between sections."
+            f"Ensure clarity and coherence in your writing. Eliminate redundancies and ensure a smooth flow between sections.\n\n"
+            f"Be thorough and don't omit any details.\n\n"
             f"Return an output in Markdown format."
         )
 

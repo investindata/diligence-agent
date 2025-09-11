@@ -77,6 +77,7 @@ class ResearchFlow(Flow[ResearchState]):
             f"{self.state.slack_data}\n\n"
             f"Using this data, write a comprehensive and well-structured section for the investment report.\n\n"
             f"Ensure clarity and coherence in your writing.\n\n"
+            f"Be thorough and don't omit any details.\n\n"
             f"Return an output in Markdown format."
         )
 
