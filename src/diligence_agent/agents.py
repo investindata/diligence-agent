@@ -5,8 +5,8 @@ from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 
 
 
-#model = "gpt-4o-mini"
-model = "gpt-4.1-mini"
+model = "gpt-4o-mini"
+#model = "gpt-4.1-mini"
 #model = "gpt-5-nano"
 #model = "gemini/gemini-1.5-flash"
 #model = "gemini/gemini-2.0-flash"
@@ -19,6 +19,8 @@ llm = LLM(
     #api_key=os.getenv("GOOGLE_API_KEY"),
     api_key=os.getenv("OPENAI_API_KEY"),
     temperature=0.0,
+    max_retries=3,
+    timeout=60,
 )
 
 organizer_agent = Agent(

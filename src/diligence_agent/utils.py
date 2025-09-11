@@ -20,10 +20,12 @@ async def execute_subflows_and_map_results(
     base_inputs: dict,
     report_structure,
     company_name: str = "",
-    current_date: str = ""
+    current_date: str = "",
+    batch_size: int = 2,
+    batch_delay: float = 0.0
 ) -> Any:
     """
-    Execute multiple subflows in parallel and map results to report structure fields.
+    Execute multiple subflows in batches and map results to report structure fields.
     
     Args:
         subflow_class: The Flow class to instantiate for each section
@@ -31,6 +33,9 @@ async def execute_subflows_and_map_results(
         base_inputs: Common inputs for all subflows
         report_structure: Report structure object to update
         company_name: Company name for file naming
+        current_date: Date when the report was generated
+        batch_size: Number of sections to run in parallel per batch
+        batch_delay: Delay in seconds between batches
         
     Returns:
         Updated report structure
@@ -46,8 +51,20 @@ async def execute_subflows_and_map_results(
             }
         ))
 
-    # Execute all subflows in parallel using asyncio.gather
-    results = await asyncio.gather(*coroutines)
+    # Execute subflows in batches
+    results = []
+    for i in range(0, len(coroutines), batch_size):
+        batch = coroutines[i:i+batch_size]
+        batch_sections = sections[i:i+batch_size]
+        
+        print(f"Starting batch {i//batch_size + 1}: {', '.join(batch_sections)}")
+        batch_results = await asyncio.gather(*batch)
+        results.extend(batch_results)
+        
+        # Add delay between batches if specified and not the last batch
+        if batch_delay > 0 and i + batch_size < len(coroutines):
+            print(f"Waiting {batch_delay} seconds before next batch...")
+            await asyncio.sleep(batch_delay)
 
     # Map results to appropriate report structure fields using centralized mapping
     for i, section_name in enumerate(sections):

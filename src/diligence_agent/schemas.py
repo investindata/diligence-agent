@@ -11,7 +11,7 @@ class OrganizedData(BaseModel):
     data: dict = Field(..., description="Organized company data in structured JSON format")
 
 class FounderBackground(BaseModel):
-    name: Annotated[str, Field(description="Full name of the founder")]
+    name: Annotated[str, Field(description="Full name of the founder")] = ""
     pronoumns: Annotated[Optional[str], Field(description="Pronoums used to address the founder")] = None
     role: Annotated[Optional[str], Field(description="Current role/title in the startup")] = None
     background: Annotated[Optional[str], Field(description="Narrative background summary")] = None
@@ -25,14 +25,14 @@ class FounderBackground(BaseModel):
 
 
 class Founders(BaseModel):
-    founders: Annotated[List[FounderBackground], Field(description="List of all founders")]
+    founders: Annotated[List[FounderBackground], Field(description="List of all founders")] = []
     overall_assessment: Annotated[Optional[str], Field(description="Synthesis of the founding team as a whole")] = None
     strengths: Annotated[Optional[List[str]], Field(description="Key strengths across the founding team")] = None
     risks: Annotated[Optional[List[str]], Field(description="Key risks across the founding team")] = None
 
 
 class Competitor(BaseModel):
-    name: str = Field(..., description="Name of the competitor company")
+    name: str = Field("", description="Name of the competitor company")
     description: Optional[str] = Field(None, description="Brief description of the competitor’s business, product, or service")
     website: Optional[HttpUrl] = Field(None, description="Official website of the competitor")
     products_or_services: Optional[List[str]] = Field(None, description="List of notable products or services offered")
@@ -46,7 +46,7 @@ class Competitor(BaseModel):
 
 
 class CompetitiveLandscape(BaseModel):
-    direct_competitors: List[Competitor] = Field(..., description="Companies offering highly similar products/services targeting the same market")
+    direct_competitors: List[Competitor] = Field([], description="Companies offering highly similar products/services targeting the same market")
     indirect_competitors: Optional[List[Competitor]] = Field(None, description="Companies offering alternative or adjacent solutions")
     emerging_competitors: Optional[List[Competitor]] = Field(None, description="New entrants or startups showing traction in the space")
     substitutes: Optional[List[str]] = Field(None, description="Alternative solutions that address the same customer need but differently")
@@ -56,7 +56,7 @@ class CompetitiveLandscape(BaseModel):
 
 
 class MarketSegment(BaseModel):
-    name: str = Field(..., description="Name of the market segment, e.g., 'SMB SaaS', 'Healthcare AI'")
+    name: str = Field("", description="Name of the market segment, e.g., 'SMB SaaS', 'Healthcare AI'")
     description: Optional[str] = Field(None, description="Brief description of the segment and its characteristics")
     size: Optional[str] = Field(None, description="Estimated size of the segment, e.g., '$10B in 2024'")
     growth_rate: Optional[str] = Field(None, description="Expected CAGR or annual growth rate")
@@ -77,7 +77,7 @@ class Market(BaseModel):
 
 
 class ProductFeature(BaseModel):
-    name: str = Field(..., description="Name of the feature")
+    name: str = Field("", description="Name of the feature")
     description: Optional[str] = Field(None, description="Brief description of what the feature does")
     differentiation: Optional[str] = Field(None, description="How this feature stands out vs competitors")
 
@@ -114,7 +114,7 @@ class WhyInteresting(BaseModel):
     overall_summary: Optional[str] = Field(None, description="Concise narrative: why this company is interesting for investors")
 
 class CompanyOverview(BaseModel):
-    name: str = Field(..., description="The official name of the company.")
+    name: str = Field("", description="The official name of the company.")
     location: Optional[str] = Field(None, description="Headquarters location (city, state, country).")
     founding_year: Optional[int] = Field(None, description="Year the company was founded.")
     stage: Optional[str] = Field(None, description="Company stage (e.g., pre-seed, seed, Series A, growth).")
@@ -126,10 +126,10 @@ class CompanyOverview(BaseModel):
 
 class ReportConclusion(BaseModel):
     key_strengths: list[str] = Field(
-        ..., description="List of the company's most compelling strengths (e.g., strong founding team, differentiated technology)."
+        [], description="List of the company's most compelling strengths (e.g., strong founding team, differentiated technology)."
     )
     key_risks: list[str] = Field(
-        ..., description="List of risks or concerns (e.g., competitive pressure, regulatory uncertainty, unclear business model)."
+        [], description="List of risks or concerns (e.g., competitive pressure, regulatory uncertainty, unclear business model)."
     )
     investment_thesis: Optional[str] = Field(
         None, description="Summary of why this company is interesting or not as an investment opportunity."

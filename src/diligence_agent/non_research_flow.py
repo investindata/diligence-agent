@@ -36,7 +36,7 @@ class NonResearchFlow(Flow[NonResearchState]):
             f"You are given the following curated information about the company {self.state.company}:\n\n"
             f"{self.state.report_structure}\n\n"
             f"Using this data, write a comprehensive and well-structured {self.state.section} section for the investment report.\n\n"
-            f"Ensure clarity, conciseness, and coherence in your writing. "
+            f"Ensure clarity and coherence in your writing.\n\n"
         )
     
         result = await writer_agent.kickoff_async(query, response_format=schema_class)
@@ -51,8 +51,7 @@ class NonResearchFlow(Flow[NonResearchState]):
             f"You are given the following curated information about the {self.state.section} section of an investment report for company {self.state.company}:\n\n"
             f"{composed_data}\n\n"
             f"Using this data, write a comprehensive and well-structured section for the investment report.\n\n"
-            f"Ensure clarity, conciseness, and coherence in your writing. "
-            f"Return an output in Markdown format."
+            f"Ensure clarity and coherence in your writing.\n\n"
         )
 
         result = await writer_agent.kickoff_async(query)

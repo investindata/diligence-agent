@@ -27,6 +27,12 @@ class DiligenceState(BaseModel):
     company_name: str = ""
     current_date: str = ""
     skip_method: bool = False
+    
+    # execution parameters
+    batch_size: int = 2
+    batch_delay: float = 0.0  # seconds
+    num_search_terms: int = 5
+    num_websites: int = 10
 
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
@@ -106,8 +112,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             "questionnaire_data": self.state.questionnaire_data,
             "slack_data": self.state.slack_data,
             "current_date": self.state.current_date,
-            "num_search_terms": 1,
-            "num_websites": 1,
+            "num_search_terms": self.state.num_search_terms,
+            "num_websites": self.state.num_websites,
         }
 
         # Define research sections to execute
@@ -126,7 +132,9 @@ class DiligenceFlow(Flow[DiligenceState]):
             base_inputs,
             self.state.report_structure,
             self.state.company_name,
-            self.state.current_date
+            self.state.current_date,
+            self.state.batch_size,
+            self.state.batch_delay
         )
 
         print(f"✅ Research flows completed")
@@ -158,7 +166,9 @@ class DiligenceFlow(Flow[DiligenceState]):
             base_inputs,
             self.state.report_structure,
             self.state.company_name,
-            self.state.current_date
+            self.state.current_date,
+            self.state.batch_size,
+            self.state.batch_delay
         )
 
         print(f"✅ Non-research flows completed")
@@ -171,7 +181,7 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"You are given the following structured report about company {self.state.company_name}:\n\n"
             f"{report_structure}\n\n"
             f"Using this data, write a comprehensive and well-structured investment report.\n\n"
-            f"Ensure clarity, conciseness, and coherence in your writing. Eliminate redundancies and ensure a smooth flow between sections."
+            f"Ensure clarity and coherence in your writing. Eliminate redundancies and ensure a smooth flow between sections."
             f"Return an output in Markdown format."
         )
 

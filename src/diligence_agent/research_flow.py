@@ -56,7 +56,8 @@ class ResearchFlow(Flow[ResearchState]):
             f"{websites}\n\n"
             f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
             f"{schema_description}\n\n"
-            f"Ignore any websites that are invalid or do not provide useful information.\n\n"
+            f"Ignore any websites that are invalid.\n\n"
+            f"Include as many details as possible."
         )
 
         result = await scraper_agent.kickoff_async(query, response_format=schema_class)
@@ -75,7 +76,7 @@ class ResearchFlow(Flow[ResearchState]):
             f"And you have access to internal Slack conversations from the investment team with the following data:\n\n"
             f"{self.state.slack_data}\n\n"
             f"Using this data, write a comprehensive and well-structured section for the investment report.\n\n"
-            f"Ensure clarity, conciseness, and coherence in your writing. "
+            f"Ensure clarity and coherence in your writing.\n\n"
             f"Return an output in Markdown format."
         )
 
