@@ -31,8 +31,8 @@ class DiligenceState(BaseModel):
     # execution parameters
     batch_size: int = 2
     batch_delay: float = 0.0  # seconds
-    num_search_terms: int = 5
-    num_websites: int = 10
+    num_search_terms: int = 2
+    num_websites: int = 2
 
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"
@@ -216,6 +216,11 @@ async def kickoff(clear_cache: bool = False) -> Any:
     )
     flow_id = getattr(diligence_flow.state, 'id', 'unknown')
     print(f"🆔 Flow completed! To run individual tasks, use this ID: {flow_id}")
+    
+    # Show cache performance stats
+    from src.diligence_agent.tools.cached_serper_tools import print_cache_stats
+    print_cache_stats()
+    
     return result
 
 
