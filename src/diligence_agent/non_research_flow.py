@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from typing import Any
 from crewai.flow.flow import Flow, listen, start
-from crewai.flow.persistence import persist
 from src.diligence_agent.utils import extract_structured_output, get_schema_for_section
 from src.diligence_agent.agents import search_agent, scraper_agent, writer_agent
 from src.diligence_agent.schemas import ReportStructure

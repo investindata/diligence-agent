@@ -31,8 +31,8 @@ class DiligenceState(BaseModel):
     # execution parameters
     batch_size: int = 2
     batch_delay: float = 0.0  # seconds
-    num_search_terms: int = 2
-    num_websites: int = 2
+    num_search_terms: int = 5
+    num_websites: int = 10
 
     # questionnaire organizer flow
     questionaire_url: str = "https://docs.google.com/spreadsheets/d/1ySCoSgVf2A00HD8jiCEV-EYADuYJP3P2Ewwx_DqARDg/edit?usp=sharing"

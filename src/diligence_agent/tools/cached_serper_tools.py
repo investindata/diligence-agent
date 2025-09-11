@@ -68,7 +68,7 @@ class CachedSerperDevTool(BaseTool):
             shutil.rmtree(self.cache_dir)
         os.makedirs(self.cache_dir, exist_ok=True)
         # Reset stats
-        self.stats = {'hits': 0, 'misses': 0, 'memory_hits': 0, 'file_hits': 0}
+        object.__setattr__(self, 'stats', {'hits': 0, 'misses': 0, 'memory_hits': 0, 'file_hits': 0})
     
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache performance statistics."""
@@ -146,30 +146,42 @@ class CachedSerperScrapeWebsiteTool(BaseTool):
         """Get the file path for a cache key."""
         return os.path.join(self.cache_dir, f"{cache_key}.json")
     
-    def _load_from_file_cache(self, cache_key: str) -> Optional[Any]:
+    def _load_from_file_cache(self, cache_key: str) -> Optional[dict]:
         """Load cached result from file."""
         cache_file = self._get_cache_file_path(cache_key)
         if os.path.exists(cache_file):
             try:
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     cached_data = json.load(f)
-                    return cached_data['result']
+                    return {
+                        'result': cached_data['result'],
+                        'is_invalid': cached_data.get('is_invalid', False)
+                    }
             except (json.JSONDecodeError, KeyError, IOError):
                 pass
         return None
     
-    def _save_to_file_cache(self, cache_key: str, result: Any) -> None:
+    def _save_to_file_cache(self, cache_key: str, result: Any, is_invalid: bool = False) -> None:
         """Save result to file cache."""
         cache_file = self._get_cache_file_path(cache_key)
         try:
             cached_data = {
                 'cache_key': cache_key,
-                'result': result
+                'result': result,
+                'is_invalid': is_invalid
             }
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cached_data, f, indent=2, ensure_ascii=False)
         except (IOError, TypeError):
             pass
+    
+    def _is_invalid_result(self, result: str) -> bool:
+        """Detect if scraping result indicates non-existent/invalid website."""
+        if not result or not isinstance(result, str):
+            return True
+        
+        # Serper returns "Error scraping [URL]: [error details]" for failed scrapes
+        return result.startswith("Error scraping")
     
     def clear_cache(self) -> None:
         """Clear both memory and file cache."""
@@ -178,7 +190,7 @@ class CachedSerperScrapeWebsiteTool(BaseTool):
             shutil.rmtree(self.cache_dir)
         os.makedirs(self.cache_dir, exist_ok=True)
         # Reset stats
-        self.stats = {'hits': 0, 'misses': 0, 'memory_hits': 0, 'file_hits': 0}
+        object.__setattr__(self, 'stats', {'hits': 0, 'misses': 0, 'memory_hits': 0, 'file_hits': 0})
     
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache performance statistics."""
@@ -202,19 +214,35 @@ class CachedSerperScrapeWebsiteTool(BaseTool):
         
         # Check memory cache first
         if cache_key in self.memory_cache:
+            cached_data = self.memory_cache[cache_key]
             self.stats['hits'] += 1
             self.stats['memory_hits'] += 1
-            print(f"🧠 Cache HIT (memory): {url[:50]}...")
-            return self.memory_cache[cache_key]
+            
+            # Check if this is a cached invalid result
+            if isinstance(cached_data, dict) and cached_data.get('is_invalid'):
+                print(f"🧠 Cache HIT (memory - invalid): {url[:50]}...")
+                return cached_data['result']
+            else:
+                print(f"🧠 Cache HIT (memory): {url[:50]}...")
+                return cached_data
         
         # Check file cache
         cached_result = self._load_from_file_cache(cache_key)
         if cached_result is not None:
             self.stats['hits'] += 1
             self.stats['file_hits'] += 1
-            self.memory_cache[cache_key] = cached_result
-            print(f"🗂️ Cache HIT (file): {url[:50]}...")
-            return cached_result
+            
+            # Handle cached invalid results
+            if cached_result.get('is_invalid'):
+                print(f"🗂️ Cache HIT (file - invalid): {url[:50]}...")
+                # Store in memory cache with invalid flag
+                self.memory_cache[cache_key] = cached_result
+                return cached_result['result']
+            else:
+                print(f"🗂️ Cache HIT (file): {url[:50]}...")
+                # Store plain result in memory cache
+                self.memory_cache[cache_key] = cached_result['result']
+                return cached_result['result']
         
         # No cache hit, call the actual Serper API
         self.stats['misses'] += 1
@@ -222,9 +250,21 @@ class CachedSerperScrapeWebsiteTool(BaseTool):
         
         try:
             result = self.serper_tool._run(url=url, **kwargs)
-            # Cache the result in both memory and file
-            self.memory_cache[cache_key] = result
-            self._save_to_file_cache(cache_key, result)
+            
+            # Check if the result indicates an invalid/non-existent website
+            is_invalid = self._is_invalid_result(result)
+            
+            if is_invalid:
+                print(f"⚠️ Invalid result detected for: {url[:50]}...")
+                # Cache as invalid result with structured format
+                invalid_data = {'result': result, 'is_invalid': True}
+                self.memory_cache[cache_key] = invalid_data
+                self._save_to_file_cache(cache_key, result, is_invalid=True)
+            else:
+                # Cache normal valid result
+                self.memory_cache[cache_key] = result
+                self._save_to_file_cache(cache_key, result, is_invalid=False)
+            
             return result
         except Exception as e:
             # Don't cache errors, just re-raise
