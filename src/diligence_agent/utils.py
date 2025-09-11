@@ -177,7 +177,11 @@ def clean_markdown_output(content: str) -> str:
         Cleaned markdown content
     """
     if not content:
+        print("🧹 clean_markdown_output: No content to clean")
         return content
+    
+    print(f"🧹 clean_markdown_output: Cleaning content (length: {len(content)} chars)")
+    print(f"🧹 Content preview: {content[:200]}...")
     
     # Remove markdown code blocks (```markdown at start, ``` at end)
     cleaned = re.sub(r'^```markdown\s*\n?', '', content.strip(), flags=re.MULTILINE)
@@ -189,7 +193,10 @@ def clean_markdown_output(content: str) -> str:
     # Clean up extra blank lines that may result from removing horizontal rules
     cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned)
     
-    return cleaned.strip()
+    result = cleaned.strip()
+    print(f"🧹 clean_markdown_output: Result length: {len(result)} chars")
+    
+    return result
 
 def validate_json_output(output_text: str) -> tuple[bool, str]:
     """
@@ -362,31 +369,43 @@ def write_section_file(section_name: str, content: str, company_name: str, curre
     Returns:
         File path where the content was saved
     """
-    if not content or not content.strip():
+    try:
+        if not content or not content.strip():
+            print(f"⚠️  No content to write for section: {section_name}")
+            return ""
+        
+        print(f"📝 Writing section: {section_name} (content length: {len(content)} chars)")
+        
+        # Create company-specific directory
+        company_dir = os.path.join(output_dir, company_name)
+        os.makedirs(company_dir, exist_ok=True)
+        print(f"📁 Using directory: {company_dir}")
+        
+        # Get section number and format filename
+        section_number = SECTION_ORDER.get(section_name, 99)  # Default to 99 for unknown sections
+        section_filename = section_name.replace(' ', '_').lower()
+        filename = f"{section_number}.{section_filename}.md"
+        filepath = os.path.join(company_dir, filename)
+        print(f"💾 Writing to: {filepath}")
+        
+        # Write file with metadata header and section content
+        with open(filepath, 'w', encoding='utf-8') as f:
+            # Write metadata header
+            f.write(f"**Company:** {company_name}  \n")
+            f.write(f"**Section:** {section_name}  \n")
+            f.write(f"**Generated:** {current_date}  \n\n")
+            
+            # Write the actual content
+            f.write(content)
+        
+        print(f"✅ Successfully wrote {filepath}")
+        return filepath
+        
+    except Exception as e:
+        print(f"❌ Error writing section {section_name}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return ""
-    
-    # Create company-specific directory
-    company_dir = os.path.join(output_dir, company_name)
-    os.makedirs(company_dir, exist_ok=True)
-    
-    # Get section number and format filename
-    section_number = SECTION_ORDER.get(section_name, 99)  # Default to 99 for unknown sections
-    section_filename = section_name.replace(' ', '_').lower()
-    filename = f"{section_number}.{section_filename}.md"
-    filepath = os.path.join(company_dir, filename)
-    
-    # Write file with metadata header and section content
-    with open(filepath, 'w', encoding='utf-8') as f:
-        # Write metadata header
-        
-        f.write(f"**Company:** {company_name}  \n")
-        f.write(f"**Section:** {section_name}  \n")
-        f.write(f"**Generated:** {current_date}  \n")
-        
-        # Write the actual content
-        f.write(content)
-    
-    return filepath
 
 # =============================================================================
 # Other Utilities
