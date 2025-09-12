@@ -321,9 +321,10 @@ def fetch_slack_channel_data(channels: list) -> str:
 
                 if history_tool:
                     # Use the MCP tool to fetch channel messages with correct parameter format
+                    # Reduced limit to prevent timeouts with large channels
                     result = history_tool._run(
                         channel_id=channel['id'],
-                        limit=2000
+                        limit=500  
                     )
                     channel_content = f"Messages from {channel['name']}:\n{result}\n"
                 else:
@@ -489,4 +490,101 @@ def get_field_for_section(section: str) -> str:
     config = SECTION_CONFIG.get(section)
     if not config:
         raise ValueError(f"Unknown section: {section}")
-    return config["field"]  
+    return config["field"]
+
+
+def write_final_report_to_google_doc(document_name: str, markdown_content: str, source_doc_url: str) -> Optional[str]:
+    """
+    Write final report to Google Drive as a formatted Google Doc.
+    
+    Args:
+        document_name: Name for the new Google Doc
+        markdown_content: Markdown content to convert and write
+        source_doc_url: Source Google Doc URL to extract folder from
+        
+    Returns:
+        Google Doc URL if successful, None if failed
+    """
+    try:
+        from .tools.google_doc_processor import GoogleDocProcessor
+        import os
+        import re
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        
+        print(f"📄 Creating Google Doc: {document_name}")
+        
+        # Reuse GoogleDocProcessor's authentication logic
+        processor = GoogleDocProcessor()
+        
+        # Get authenticated services
+        client_id = os.getenv('GOOGLE_CLIENT_ID', '').strip()
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET', '').strip()
+        refresh_token = os.getenv('GOOGLE_REFRESH_TOKEN', '').strip()
+        
+        if not all([client_id, client_secret, refresh_token]):
+            raise ValueError("Missing Google OAuth2 credentials")
+        
+        # Create credentials with minimal scopes (same as GoogleDocProcessor)
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret
+            # Let Google determine scopes from the existing token
+        )
+        
+        if not creds.valid:
+            creds.refresh(Request())
+        
+        docs_service = build('docs', 'v1', credentials=creds)
+        drive_service = build('drive', 'v3', credentials=creds)
+        
+        # Extract folder from source doc
+        doc_info = processor._extract_document_id_and_type(source_doc_url)
+        folder_id = None
+        
+        if doc_info and doc_info[0]:
+            doc_id = doc_info[0]
+            try:
+                file_info = drive_service.files().get(fileId=doc_id, fields='parents').execute()
+                parents = file_info.get('parents', [])
+                if parents:
+                    folder_id = parents[0]
+                    print(f"📁 Found folder ID: {folder_id}")
+            except Exception as e:
+                print(f"⚠️ Could not get folder info: {e}")
+        
+        # Create document
+        create_body: dict = {'title': document_name}
+        if folder_id:
+            create_body['parents'] = [folder_id]
+        
+        doc = docs_service.documents().create(body=create_body).execute()
+        document_id = doc.get('documentId')
+        document_url = f"https://docs.google.com/document/d/{document_id}/edit"
+        
+        print(f"📄 Created Google Doc: {document_name}")
+        
+        # Insert the markdown content as plain text
+        requests = [{
+            'insertText': {
+                'location': {'index': 1},
+                'text': markdown_content
+            }
+        }]
+        
+        docs_service.documents().batchUpdate(
+            documentId=document_id,
+            body={'requests': requests}
+        ).execute()
+        
+        print(f"✅ Google Doc created successfully: {document_url}")
+        return document_url
+        
+    except Exception as e:
+        print(f"⚠️ Warning: Could not create Google Doc: {str(e)}")
+        print("   Local file output has been preserved")
+        return None

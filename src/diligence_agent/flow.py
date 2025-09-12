@@ -15,7 +15,8 @@ from src.diligence_agent.utils import (
     fetch_slack_channel_data,
     write_section_file,
     clean_markdown_output,
-    write_parsed_data_sources
+    write_parsed_data_sources,
+    write_final_report_to_google_doc
 )
 import os
 
@@ -36,26 +37,23 @@ class DiligenceState(BaseModel):
     current_date: str = ""
     
     # execution parameters
-    batch_size: int = 2
+    batch_size: int = 1
     batch_delay: float = 0.0  # seconds
-    num_search_terms: int = 5
-    num_websites: int = 10
+    num_search_terms: int = 1
+    num_websites: int = 1
 
-    # section control
-    research_sections: List[str] = [
+    # section control - list of sections to run
+    sections_to_run: List[str] = [
+        "Get Data Sources",
+        "Parse Data Sources", 
         "Company Overview",            
         "Product",
         "Competitive Landscape",
         "Market", 
         "Founders",
-    ]
-    non_research_sections: List[str] = [         
         "Why Interesting",
         "Report Conclusion",
-    ]
-    data_processing_steps: List[str] = [
-        "Get Data Sources",
-        "Parse Data Sources",
+        "Final Report"
     ]
 
     # data sources organizer flow
@@ -89,7 +87,7 @@ class DiligenceFlow(Flow[DiligenceState]):
     @start()
     async def get_data_sources(self) -> DataSources:
         """Parse Google Doc containing data sources and return structured DataSources schema"""
-        if "Get Data Sources" not in self.state.data_processing_steps:
+        if "Get Data Sources" not in self.state.sections_to_run:
             print("⏭️  Skipping data source extraction")
             return self.state.data_sources
         
@@ -115,7 +113,7 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(get_data_sources)
     async def parse_data_sources(self, data_sources: DataSources) -> Dict[str, str]:
         """Parse individual data sources and return markdown content for each"""
-        if "Parse Data Sources" not in self.state.data_processing_steps:
+        if "Parse Data Sources" not in self.state.sections_to_run:
             print("⏭️  Skipping data source parsing")
             return self.state.parsed_data_sources
         
@@ -176,6 +174,15 @@ class DiligenceFlow(Flow[DiligenceState]):
     async def run_research_flows(self, parsed_data_sources: Dict[str, str]) -> ReportStructure:
         """Execute research flows to generate report sections that require external research"""
         
+        # Define research sections to run
+        research_sections = ["Company Overview", "Product", "Competitive Landscape", "Market", "Founders"]
+        sections_to_execute = [s for s in research_sections if s in self.state.sections_to_run]
+        
+        if not sections_to_execute:
+            print("⏭️  Skipping research flows (no research sections requested)")
+            # Still need to return existing report structure from state
+            return self.state.report_structure
+        
         # Define common inputs for all research flows
         base_inputs = {
             "company": self.state.company_name,
@@ -188,7 +195,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         # Execute subflows and map results using centralized function
         await execute_subflows_and_map_results(
             ResearchFlow,
-            self.state.research_sections,
+            sections_to_execute,
             base_inputs,
             self.state.report_structure,
             self.state.company_name,
@@ -204,7 +211,15 @@ class DiligenceFlow(Flow[DiligenceState]):
     async def run_non_research_flows(self) -> ReportStructure:
         """Write remaining sections of the report that are not covered by research flows"""
         
-        # Define common inputs for all research flows
+        # Define non-research sections to run
+        non_research_sections = ["Why Interesting", "Report Conclusion"]
+        sections_to_execute = [s for s in non_research_sections if s in self.state.sections_to_run]
+        
+        if not sections_to_execute:
+            print("⏭️  Skipping non-research flows (no non-research sections requested)")
+            return self.state.report_structure
+        
+        # Define common inputs for all non-research flows
         base_inputs = {
             "company": self.state.company_name,
             "report_structure": self.state.report_structure,
@@ -213,7 +228,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         # Execute subflows and map results using centralized function
         await execute_subflows_and_map_results(
             NonResearchFlow,
-            self.state.non_research_sections,
+            sections_to_execute,
             base_inputs,
             self.state.report_structure,
             self.state.company_name,
@@ -228,9 +243,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(run_non_research_flows)
     async def finalize_report(self, report_structure: ReportStructure) -> str:
         """Finalize and format the complete report"""
-        # Skip finalization if running specific sections (not a full report)
-        if not (self.state.research_sections and self.state.non_research_sections):
-            print("⏭️  Skipping report finalization (running specific sections only)")
+        # Skip finalization if Final Report is not in sections to run
+        if "Final Report" not in self.state.sections_to_run:
+            print("⏭️  Skipping report finalization (Final Report not requested)")
             return self.state.final_report
         
         query = (
@@ -251,6 +266,18 @@ class DiligenceFlow(Flow[DiligenceState]):
             final_report_filepath = write_section_file("Final Report", final_report, self.state.company_name, self.state.current_date)
             if final_report_filepath:
                 print(f"✅ Final report completed")
+            
+            # Also write to Google Drive
+            document_name = f"{self.state.company_name}_Final_Report_{self.state.current_date}"
+            google_doc_url = write_final_report_to_google_doc(
+                document_name=document_name,
+                markdown_content=final_report,
+                source_doc_url=self.state.data_sources_file
+            )
+            
+            if google_doc_url:
+                print(f"🔗 Google Doc available at: {google_doc_url}")
+        
         self.state.final_report = final_report
         return self.state.final_report
 
@@ -277,28 +304,15 @@ async def kickoff(flow_id: Optional[str] = None, sections: Optional[List[str]] =
     if flow_id:
         inputs = {"id": flow_id}
         
-        # Override section lists if sections are specified
+        # Override sections if specified
         if sections:
             print(f"🎯 Running specific sections: {sections}")
             
-            research_sections = {"Company Overview", "Product", "Competitive Landscape", "Market", "Founders"}
-            non_research_sections = {"Why Interesting", "Report Conclusion"}
-            data_processing_steps = {"Get Data Sources", "Parse Data Sources"}
             
-            specified_research = [s for s in sections if s in research_sections]
-            specified_non_research = [s for s in sections if s in non_research_sections]
-            specified_data_steps = [s for s in sections if s in data_processing_steps]
-            
-            # Set empty lists for sections not requested
-            inputs["research_sections"] = specified_research if specified_research else []
-            inputs["non_research_sections"] = specified_non_research if specified_non_research else []
-            inputs["data_processing_steps"] = specified_data_steps if specified_data_steps else []
-            
-            print(f"📄 Data processing steps to run: {specified_data_steps}")
-            print(f"📊 Research sections to run: {specified_research}")
-            print(f"📝 Non-research sections to run: {specified_non_research}")
+            inputs["sections_to_run"] = sections # type: ignore
+            print(f"📋 Sections to run: {sections}")
     else:
-        # No flow ID provided, start fresh
+        # No flow ID provided, start fresh - run all sections by default
         inputs = {
             "company_name": "tensorstax",
             "current_date": datetime.now().strftime("%Y-%m-%d"),
@@ -313,8 +327,13 @@ async def kickoff(flow_id: Optional[str] = None, sections: Optional[List[str]] =
         print(f"🆔 Flow completed! To run individual tasks, use this ID: {flow_id}")
     
     # Show cache performance stats
-    from src.diligence_agent.tools.cached_serper_tools import print_cache_stats
-    print_cache_stats()
+    try:
+        from src.diligence_agent.tools.cached_serper_tools import print_cache_stats
+        print_cache_stats()
+    except Exception as e:
+        print(f"❌ Error showing cache stats: {e}")
+        import traceback
+        traceback.print_exc()
     
     return result
 
