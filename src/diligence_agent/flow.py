@@ -34,13 +34,29 @@ class DiligenceState(BaseModel):
     # general info
     company_name: str = ""
     current_date: str = ""
-    skip_method: bool = False
     
     # execution parameters
     batch_size: int = 2
     batch_delay: float = 0.0  # seconds
-    num_search_terms: int = 2
-    num_websites: int = 2
+    num_search_terms: int = 5
+    num_websites: int = 10
+
+    # section control
+    research_sections: List[str] = [
+        "Company Overview",            
+        "Product",
+        "Competitive Landscape",
+        "Market", 
+        "Founders",
+    ]
+    non_research_sections: List[str] = [         
+        "Why Interesting",
+        "Report Conclusion",
+    ]
+    data_processing_steps: List[str] = [
+        "Get Data Sources",
+        "Parse Data Sources",
+    ]
 
     # data sources organizer flow
     data_sources_file: str = "https://docs.google.com/document/d/1TZEg-gljazGMUuG1KWKoNc3PDHMGLahD5ofd1BoBWR8/edit?usp=sharing"
@@ -73,7 +89,8 @@ class DiligenceFlow(Flow[DiligenceState]):
     @start()
     async def get_data_sources(self) -> DataSources:
         """Parse Google Doc containing data sources and return structured DataSources schema"""
-        if self.state.skip_method and self.state.data_sources.google_docs:
+        if "Get Data Sources" not in self.state.data_processing_steps:
+            print("⏭️  Skipping data source extraction")
             return self.state.data_sources
         
         # Retrieve raw content from Google Doc
@@ -98,7 +115,8 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(get_data_sources)
     async def parse_data_sources(self, data_sources: DataSources) -> Dict[str, str]:
         """Parse individual data sources and return markdown content for each"""
-        if self.state.skip_method and self.state.parsed_data_sources:
+        if "Parse Data Sources" not in self.state.data_processing_steps:
+            print("⏭️  Skipping data source parsing")
             return self.state.parsed_data_sources
         
         print("Data sources to parse:", data_sources)
@@ -157,8 +175,6 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(parse_data_sources)
     async def run_research_flows(self, parsed_data_sources: Dict[str, str]) -> ReportStructure:
         """Execute research flows to generate report sections that require external research"""
-        #if self.state.skip_method and self.state.report_structure:
-        #    return self.state.report_structure
         
         # Define common inputs for all research flows
         base_inputs = {
@@ -169,19 +185,10 @@ class DiligenceFlow(Flow[DiligenceState]):
             "num_websites": self.state.num_websites,
         }
 
-        # Define research sections to execute
-        research_sections = [
-            #"Company Overview",            
-            #"Product",
-            "Competitive Landscape",
-            #"Market", 
-            #"Founders",
-        ]
-
         # Execute subflows and map results using centralized function
         await execute_subflows_and_map_results(
             ResearchFlow,
-            research_sections,
+            self.state.research_sections,
             base_inputs,
             self.state.report_structure,
             self.state.company_name,
@@ -196,8 +203,6 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(run_research_flows)
     async def run_non_research_flows(self) -> ReportStructure:
         """Write remaining sections of the report that are not covered by research flows"""
-        if self.state.skip_method and self.state.report_structure.why_interesting_section and self.state.report_structure.report_conclusion_section:
-            return self.state.report_structure
         
         # Define common inputs for all research flows
         base_inputs = {
@@ -205,16 +210,10 @@ class DiligenceFlow(Flow[DiligenceState]):
             "report_structure": self.state.report_structure,
         }
 
-        # Define research sections to execute
-        non_research_sections = [         
-            "Why Interesting",
-            "Report Conclusion",
-        ]
-        
         # Execute subflows and map results using centralized function
         await execute_subflows_and_map_results(
             NonResearchFlow,
-            non_research_sections,
+            self.state.non_research_sections,
             base_inputs,
             self.state.report_structure,
             self.state.company_name,
@@ -229,7 +228,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(run_non_research_flows)
     async def finalize_report(self, report_structure: ReportStructure) -> str:
         """Finalize and format the complete report"""
-        if self.state.skip_method and self.state.final_report:
+        # Skip finalization if running specific sections (not a full report)
+        if not (self.state.research_sections and self.state.non_research_sections):
+            print("⏭️  Skipping report finalization (running specific sections only)")
             return self.state.final_report
         
         query = (
@@ -254,7 +255,15 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.final_report
 
 
-async def kickoff(clear_cache: bool = False) -> Any:
+async def kickoff(flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False) -> Any:
+    """
+    Run the diligence flow with optional flow ID and specific sections.
+    
+    Args:
+        flow_id: Optional flow ID to resume existing flow
+        sections: Optional list of specific sections to run
+        clear_cache: Whether to clear the cache before running
+    """
     # Clear cache if requested
     if clear_cache:
         from src.diligence_agent.tools.cached_serper_tools import cached_serper_search, cached_serper_scraper
@@ -263,47 +272,50 @@ async def kickoff(clear_cache: bool = False) -> Any:
         print("🗑️ Cache cleared")
     
     diligence_flow = DiligenceFlow()
-    result = await diligence_flow.kickoff_async(
-        inputs={
+    
+    # Prepare inputs
+    if flow_id:
+        inputs = {"id": flow_id}
+        
+        # Override section lists if sections are specified
+        if sections:
+            print(f"🎯 Running specific sections: {sections}")
+            
+            research_sections = {"Company Overview", "Product", "Competitive Landscape", "Market", "Founders"}
+            non_research_sections = {"Why Interesting", "Report Conclusion"}
+            data_processing_steps = {"Get Data Sources", "Parse Data Sources"}
+            
+            specified_research = [s for s in sections if s in research_sections]
+            specified_non_research = [s for s in sections if s in non_research_sections]
+            specified_data_steps = [s for s in sections if s in data_processing_steps]
+            
+            # Set empty lists for sections not requested
+            inputs["research_sections"] = specified_research if specified_research else []
+            inputs["non_research_sections"] = specified_non_research if specified_non_research else []
+            inputs["data_processing_steps"] = specified_data_steps if specified_data_steps else []
+            
+            print(f"📄 Data processing steps to run: {specified_data_steps}")
+            print(f"📊 Research sections to run: {specified_research}")
+            print(f"📝 Non-research sections to run: {specified_non_research}")
+    else:
+        # No flow ID provided, start fresh
+        inputs = {
             "company_name": "tensorstax",
             "current_date": datetime.now().strftime("%Y-%m-%d"),
-            "skip_method": False
         }
-    )
+    
+    result = await diligence_flow.kickoff_async(inputs=inputs)
     flow_id = getattr(diligence_flow.state, 'id', 'unknown')
-    print(f"🆔 Flow completed! To run individual tasks, use this ID: {flow_id}")
+    
+    if sections:
+        print(f"✅ Sections completed using flow ID: {flow_id}")
+    else:
+        print(f"🆔 Flow completed! To run individual tasks, use this ID: {flow_id}")
     
     # Show cache performance stats
     from src.diligence_agent.tools.cached_serper_tools import print_cache_stats
     print_cache_stats()
     
-    return result
-
-
-async def kickoff_task(flow_id: Optional[str] = None, clear_cache: bool = False) -> Any:
-    """Run a single task of the flow with persistent state."""
-    # Clear cache if requested
-    if clear_cache:
-        from src.diligence_agent.tools.cached_serper_tools import cached_serper_search, cached_serper_scraper
-        cached_serper_search.clear_cache()
-        cached_serper_scraper.clear_cache()
-        print("🗑️ Cache cleared")
-
-    diligence_flow = DiligenceFlow()
-
-    if flow_id:
-        # Load existing flow state using the provided ID
-        result = await diligence_flow.kickoff_async(
-            inputs={"id": flow_id, "skip_method": True}
-        )
-    else:
-        # No flow ID provided, start fresh with skip_method=True
-        result = await diligence_flow.kickoff_async(
-            inputs={"company_name": "tensorstax", "current_date": datetime.now().strftime("%Y-%m-%d"), "skip_method": True}
-        )
-
-    flow_id = getattr(diligence_flow.state, 'id', 'unknown')
-    print(f"✅ Task completed using flow ID: {flow_id}")
     return result
 
 
@@ -317,13 +329,12 @@ def plot():
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) > 1:
-        # Run with flow ID if provided
-        flow_id = sys.argv[1]
-        asyncio.run(kickoff_task(flow_id))
-    else:
-        # Run full flow by default
-        asyncio.run(kickoff())
+    # Parse command line arguments
+    flow_id = sys.argv[1] if len(sys.argv) > 1 else None
+    sections = sys.argv[2:] if len(sys.argv) > 2 else None
+    
+    # Run the flow with parsed arguments
+    asyncio.run(kickoff(flow_id=flow_id, sections=sections))
 
     plot()
 
