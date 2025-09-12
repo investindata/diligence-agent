@@ -39,8 +39,8 @@ class DiligenceState(BaseModel):
     # execution parameters
     batch_size: int = 2
     batch_delay: float = 0.0  # seconds
-    num_search_terms: int = 5
-    num_websites: int = 10
+    num_search_terms: int = 2
+    num_websites: int = 2
 
     # data sources organizer flow
     data_sources_file: str = "https://docs.google.com/document/d/1TZEg-gljazGMUuG1KWKoNc3PDHMGLahD5ofd1BoBWR8/edit?usp=sharing"
@@ -52,7 +52,7 @@ class DiligenceState(BaseModel):
     )
     parsed_data_sources: Dict[str, str] = {}
     
-    # research report structure
+    # Report structure
     report_structure: ReportStructure = ReportStructure(
         company_overview_section="",
         product_section="",
@@ -62,6 +62,8 @@ class DiligenceState(BaseModel):
         market_section="",
         report_conclusion_section=""
     )
+
+    final_report: str = ""
 
     
 
@@ -123,8 +125,6 @@ class DiligenceFlow(Flow[DiligenceState]):
                 raw_content = google_doc_processor._run(doc_url).strip()
                 parsed_sources[f"Google Doc {i+1}"] = await process_source(f"Google Doc {i+1}", raw_content)
                 print(f"  ✅ Google Doc {i+1} processed ({len(raw_content)} chars)")
-        else:
-            print("📄 No Google Docs to process")
         
         # Process Websites
         if data_sources.websites:
@@ -135,8 +135,6 @@ class DiligenceFlow(Flow[DiligenceState]):
                 raw_content = cached_serper_scraper._run(url=website_url)
                 parsed_sources[f"Website: {website_url}"] = await process_source(f"Website: {website_url}", raw_content)
                 print(f"  ✅ Website {i+1} processed ({len(raw_content)} chars)")
-        else:
-            print("🌐 No websites to process")
         
         # Process Slack Channels
         if data_sources.slack_channels:
@@ -148,8 +146,6 @@ class DiligenceFlow(Flow[DiligenceState]):
                 raw_content = fetch_slack_channel_data([channel_info])
                 parsed_sources[f"Slack: {channel_id}"] = await process_source(f"Slack: {channel_id}", raw_content)
                 print(f"  ✅ Slack channel {i+1} processed ({len(raw_content)} chars)")
-        else:
-            print("💬 No Slack channels to process")
         
         # Update state and write parsed data sources to files
         self.state.parsed_data_sources = parsed_sources
@@ -160,7 +156,7 @@ class DiligenceFlow(Flow[DiligenceState]):
 
     @listen(parse_data_sources)
     async def run_research_flows(self, parsed_data_sources: Dict[str, str]) -> ReportStructure:
-
+        """Execute research flows to generate report sections that require external research"""
         #if self.state.skip_method and self.state.report_structure:
         #    return self.state.report_structure
         
@@ -175,11 +171,11 @@ class DiligenceFlow(Flow[DiligenceState]):
 
         # Define research sections to execute
         research_sections = [
-            "Company Overview",            
-            "Product",
+            #"Company Overview",            
+            #"Product",
             "Competitive Landscape",
-            "Market", 
-            "Founders",
+            #"Market", 
+            #"Founders",
         ]
 
         # Execute subflows and map results using centralized function
@@ -200,18 +196,17 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(run_research_flows)
     async def run_non_research_flows(self) -> ReportStructure:
         """Write remaining sections of the report that are not covered by research flows"""
-        #if self.state.skip_method and report_structure.company_overview_section and report_structure.why_interesting_section and report_structure.report_conclusion_section:
-        #    return report_structure
+        if self.state.skip_method and self.state.report_structure.why_interesting_section and self.state.report_structure.report_conclusion_section:
+            return self.state.report_structure
         
-         # Define common inputs for all research flows
+        # Define common inputs for all research flows
         base_inputs = {
             "company": self.state.company_name,
             "report_structure": self.state.report_structure,
         }
 
         # Define research sections to execute
-        non_research_sections = [
-            "Company Overview",            
+        non_research_sections = [         
             "Why Interesting",
             "Report Conclusion",
         ]
@@ -234,6 +229,9 @@ class DiligenceFlow(Flow[DiligenceState]):
     @listen(run_non_research_flows)
     async def finalize_report(self, report_structure: ReportStructure) -> str:
         """Finalize and format the complete report"""
+        if self.state.skip_method and self.state.final_report:
+            return self.state.final_report
+        
         query = (
             f"You are given the following structured report about company {self.state.company_name}:\n\n"
             f"{report_structure}\n\n"
@@ -252,8 +250,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             final_report_filepath = write_section_file("Final Report", final_report, self.state.company_name, self.state.current_date)
             if final_report_filepath:
                 print(f"✅ Final report completed")
-        
-        return final_report
+        self.state.final_report = final_report
+        return self.state.final_report
 
 
 async def kickoff(clear_cache: bool = False) -> Any:

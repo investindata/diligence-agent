@@ -11,8 +11,7 @@ track_crewai(project_name="diligence-agent")
 class ResearchState(BaseModel):
     section: str = ""
     company: str = ""
-    questionnaire_data: dict = {}
-    slack_data: str = ""
+    parsed_data_sources: dict = {}
     current_date: str = ""
     num_search_terms: int = 5
     num_websites: int = 10
@@ -36,6 +35,10 @@ class ResearchFlow(Flow[ResearchState]):
             f"1. Come up with a list of {self.state.num_search_terms} relevant search terms.\n\n"
             f"2. Perform a search for each term.\n\n"
             f"3. Compile a list of the top {self.state.num_websites} websites that will help gather information for all these data points.\n\n"
+            f"4. For each website, provide a brief explanation of why it is relevant.\n\n"
+            f"You also have access to supplemental data from other sources that may help guide your search:\n\n"
+            f"{self.state.parsed_data_sources}\n\n"
+            f"Do not include any google docs as part of your results.\n\n"
         )
 
         websites = await search_agent.kickoff_async(query)
@@ -58,6 +61,9 @@ class ResearchFlow(Flow[ResearchState]):
             f"{schema_description}\n\n"
             f"Ignore any websites that are invalid.\n\n"
             f"Include as many details as possible."
+            f"You also have access to supplemental data below which may contain additional links, which you should also scrape if they are relevant:\n\n"
+            f"{self.state.parsed_data_sources}\n\n"
+            f"Exclude any Google Docs links from your scraping.\n\n"
         )
 
         result = await scraper_agent.kickoff_async(query, response_format=schema_class)
@@ -71,10 +77,8 @@ class ResearchFlow(Flow[ResearchState]):
         query = (
             f"You are given the following curated information about the {self.state.section} section of an investment report for company {self.state.company}:\n\n"
             f"{scraped_data}\n\n"
-            f"You also have access to a questionnaire filled out by the founders with the following data:\n\n"
-            f"{self.state.questionnaire_data}\n\n"
-            f"And you have access to internal Slack conversations from the investment team with the following data:\n\n"
-            f"{self.state.slack_data}\n\n"
+            f"You also have access to supplemental data from other sources:\n\n"
+            f"{self.state.parsed_data_sources}\n\n"
             f"Using this data, write a comprehensive and well-structured section for the investment report.\n\n"
             f"Ensure clarity and coherence in your writing.\n\n"
             f"Be thorough and don't omit any details.\n\n"
