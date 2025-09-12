@@ -493,6 +493,152 @@ def get_field_for_section(section: str) -> str:
     return config["field"]
 
 
+def _convert_markdown_to_google_docs_format(markdown_content: str) -> List[Dict]:
+    """Convert markdown content to Google Docs API format requests."""
+    requests = []
+    
+    # Split content by lines and filter out empty lines
+    lines = [line for line in markdown_content.split('\n') if line.strip()]
+    current_index = 1  # Start after the initial paragraph
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Process different markdown elements
+        if line.startswith('# '):
+            # H1 - Title style
+            clean_text = line[2:] + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': clean_text
+                }
+            })
+            requests.append({
+                'updateParagraphStyle': {
+                    'range': {
+                        'startIndex': current_index,
+                        'endIndex': current_index + len(clean_text) - 1
+                    },
+                    'paragraphStyle': {
+                        'namedStyleType': 'TITLE'
+                    },
+                    'fields': 'namedStyleType'
+                }
+            })
+            current_index += len(clean_text)
+            
+        elif line.startswith('## '):
+            # H2 - Heading 1 style
+            clean_text = line[3:] + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': clean_text
+                }
+            })
+            requests.append({
+                'updateParagraphStyle': {
+                    'range': {
+                        'startIndex': current_index,
+                        'endIndex': current_index + len(clean_text) - 1
+                    },
+                    'paragraphStyle': {
+                        'namedStyleType': 'HEADING_1'
+                    },
+                    'fields': 'namedStyleType'
+                }
+            })
+            current_index += len(clean_text)
+            
+        elif line.startswith('### '):
+            # H3 - Heading 2 style
+            clean_text = line[4:] + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': clean_text
+                }
+            })
+            requests.append({
+                'updateParagraphStyle': {
+                    'range': {
+                        'startIndex': current_index,
+                        'endIndex': current_index + len(clean_text) - 1
+                    },
+                    'paragraphStyle': {
+                        'namedStyleType': 'HEADING_2'
+                    },
+                    'fields': 'namedStyleType'
+                }
+            })
+            current_index += len(clean_text)
+            
+        elif line.startswith('- ') or line.startswith('* '):
+            # Bullet points
+            clean_text = line[2:] + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': clean_text
+                }
+            })
+            requests.append({
+                'createParagraphBullets': {
+                    'range': {
+                        'startIndex': current_index,
+                        'endIndex': current_index + len(clean_text) - 1
+                    },
+                    'bulletPreset': 'BULLET_DISC_CIRCLE_SQUARE'
+                }
+            })
+            current_index += len(clean_text)
+            
+        else:
+            # Regular paragraph - handle bold text **text**
+            processed_text = line
+            bold_ranges = []
+            
+            # Find bold text patterns - handles both inline and beginning-of-line bold
+            bold_pattern = r'\*\*(.*?)\*\*'
+            matches = list(re.finditer(bold_pattern, processed_text))
+            
+            # Process matches in reverse order to maintain correct indices
+            for match in reversed(matches):
+                start_pos_in_processed = match.start()
+                end_pos_in_processed = match.start() + len(match.group(1))
+                bold_ranges.append((current_index + start_pos_in_processed, current_index + end_pos_in_processed))
+                # Replace **content** with just content
+                processed_text = processed_text[:match.start()] + match.group(1) + processed_text[match.end():]
+            
+            text_with_newline = processed_text + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': text_with_newline
+                }
+            })
+            
+            # Apply bold formatting
+            for start_idx, end_idx in bold_ranges:
+                requests.append({
+                    'updateTextStyle': {
+                        'range': {
+                            'startIndex': start_idx,
+                            'endIndex': end_idx
+                        },
+                        'textStyle': {
+                            'bold': True
+                        },
+                        'fields': 'bold'
+                    }
+                })
+            
+            current_index += len(text_with_newline)
+    
+    return requests
+
+
 def write_final_report_to_google_doc(document_name: str, markdown_content: str, source_doc_url: str) -> Optional[str]:
     """
     Write final report to Google Drive as a formatted Google Doc.
@@ -508,12 +654,16 @@ def write_final_report_to_google_doc(document_name: str, markdown_content: str, 
     try:
         from .tools.google_doc_processor import GoogleDocProcessor
         import os
-        import re
+        from datetime import datetime
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
         
-        print(f"📄 Creating Google Doc: {document_name}")
+        # Add timestamp to document name to prevent duplicates
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamped_name = f"{document_name}_{timestamp}"
+        
+        print(f"📄 Creating Google Doc: {timestamped_name}")
         
         # Reuse GoogleDocProcessor's authentication logic
         processor = GoogleDocProcessor()
@@ -556,30 +706,39 @@ def write_final_report_to_google_doc(document_name: str, markdown_content: str, 
                     print(f"📁 Found folder ID: {folder_id}")
             except Exception as e:
                 print(f"⚠️ Could not get folder info: {e}")
+        else:
+            print("⚠️ Could not extract document ID from source URL")
         
-        # Create document
-        create_body: dict = {'title': document_name}
-        if folder_id:
-            create_body['parents'] = [folder_id]
-        
-        doc = docs_service.documents().create(body=create_body).execute()
+        # Create document (first create it, then move to folder)
+        doc = docs_service.documents().create(body={'title': timestamped_name}).execute()
         document_id = doc.get('documentId')
         document_url = f"https://docs.google.com/document/d/{document_id}/edit"
         
-        print(f"📄 Created Google Doc: {document_name}")
+        print(f"📄 Created Google Doc: {timestamped_name}")
         
-        # Insert the markdown content as plain text
-        requests = [{
-            'insertText': {
-                'location': {'index': 1},
-                'text': markdown_content
-            }
-        }]
+        # Move document to the correct folder if we found one
+        if folder_id:
+            try:
+                # Move the document to the target folder
+                drive_service.files().update(
+                    fileId=document_id,
+                    addParents=folder_id,
+                    removeParents='root'  # Remove from root folder
+                ).execute()
+                print(f"📁 Moved document to folder: {folder_id}")
+            except Exception as e:
+                print(f"⚠️ Could not move document to folder: {e}")
         
-        docs_service.documents().batchUpdate(
-            documentId=document_id,
-            body={'requests': requests}
-        ).execute()
+        # Convert markdown to Google Docs formatting
+        print("📝 Converting markdown to Google Docs format...")
+        formatting_requests = _convert_markdown_to_google_docs_format(markdown_content)
+        
+        if formatting_requests:
+            docs_service.documents().batchUpdate(
+                documentId=document_id,
+                body={'requests': formatting_requests}
+            ).execute()
+            print("✅ Applied Google Docs formatting")
         
         print(f"✅ Google Doc created successfully: {document_url}")
         return document_url
