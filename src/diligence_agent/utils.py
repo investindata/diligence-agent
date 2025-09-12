@@ -575,41 +575,78 @@ def _convert_markdown_to_google_docs_format(markdown_content: str) -> List[Dict]
             current_index += len(clean_text)
             
         elif line.startswith('- ') or line.startswith('* '):
-            # Bullet points
-            clean_text = line[2:] + '\n'
+            # Bullet points - handle bold text **text**
+            processed_text = line[2:]
+            bold_ranges = []
+            
+            # Find bold text patterns
+            bold_pattern = r'\*\*(.*?)\*\*'
+            matches = list(re.finditer(bold_pattern, processed_text))
+            
+            # Calculate positions in the final text (after ** removal)
+            offset = 0
+            for match in matches:
+                start_in_original = match.start()
+                content = match.group(1)
+                start_in_processed = start_in_original - offset
+                end_in_processed = start_in_processed + len(content)
+                bold_ranges.append((current_index + start_in_processed, current_index + end_in_processed))
+                processed_text = processed_text[:start_in_original - offset] + content + processed_text[start_in_original - offset + len(match.group(0)):]
+                offset += 4
+            
+            text_with_newline = processed_text + '\n'
             requests.append({
                 'insertText': {
                     'location': {'index': current_index},
-                    'text': clean_text
+                    'text': text_with_newline
                 }
             })
             requests.append({
                 'createParagraphBullets': {
                     'range': {
                         'startIndex': current_index,
-                        'endIndex': current_index + len(clean_text) - 1
+                        'endIndex': current_index + len(text_with_newline) - 1
                     },
                     'bulletPreset': 'BULLET_DISC_CIRCLE_SQUARE'
                 }
             })
-            current_index += len(clean_text)
             
-        else:
-            # Regular paragraph - handle bold text **text**
+            # Apply bold formatting
+            for start_idx, end_idx in reversed(bold_ranges):
+                requests.append({
+                    'updateTextStyle': {
+                        'range': {
+                            'startIndex': start_idx,
+                            'endIndex': end_idx
+                        },
+                        'textStyle': {
+                            'bold': True
+                        },
+                        'fields': 'bold'
+                    }
+                })
+            
+            current_index += len(text_with_newline)
+            
+        elif re.match(r'^\d+\.\s+', line):
+            # Numbered lists - handle bold text **text**
             processed_text = line
             bold_ranges = []
             
-            # Find bold text patterns - handles both inline and beginning-of-line bold
+            # Find bold text patterns
             bold_pattern = r'\*\*(.*?)\*\*'
             matches = list(re.finditer(bold_pattern, processed_text))
             
-            # Process matches in reverse order to maintain correct indices
-            for match in reversed(matches):
-                start_pos_in_processed = match.start()
-                end_pos_in_processed = match.start() + len(match.group(1))
-                bold_ranges.append((current_index + start_pos_in_processed, current_index + end_pos_in_processed))
-                # Replace **content** with just content
-                processed_text = processed_text[:match.start()] + match.group(1) + processed_text[match.end():]
+            # Calculate positions in the final text (after ** removal)
+            offset = 0
+            for match in matches:
+                start_in_original = match.start()
+                content = match.group(1)
+                start_in_processed = start_in_original - offset
+                end_in_processed = start_in_processed + len(content)
+                bold_ranges.append((current_index + start_in_processed, current_index + end_in_processed))
+                processed_text = processed_text[:start_in_original - offset] + content + processed_text[start_in_original - offset + len(match.group(0)):]
+                offset += 4
             
             text_with_newline = processed_text + '\n'
             requests.append({
@@ -620,7 +657,59 @@ def _convert_markdown_to_google_docs_format(markdown_content: str) -> List[Dict]
             })
             
             # Apply bold formatting
-            for start_idx, end_idx in bold_ranges:
+            for start_idx, end_idx in reversed(bold_ranges):
+                requests.append({
+                    'updateTextStyle': {
+                        'range': {
+                            'startIndex': start_idx,
+                            'endIndex': end_idx
+                        },
+                        'textStyle': {
+                            'bold': True
+                        },
+                        'fields': 'bold'
+                    }
+                })
+            
+            current_index += len(text_with_newline)
+            
+        else:
+            # Regular paragraph - handle bold text **text**
+            processed_text = line
+            bold_ranges = []
+            
+            # Find bold text patterns - handles both inline and beginning-of-line bold
+            bold_pattern = r'\*\*(.*?)\*\*'
+            matches = list(re.finditer(bold_pattern, line))
+            
+            # Calculate positions in the final text (after ** removal)
+            offset = 0
+            for match in matches:
+                # Position in original text
+                start_in_original = match.start()
+                content = match.group(1)
+                
+                # Position in processed text (accounting for previous ** removals)
+                start_in_processed = start_in_original - offset
+                end_in_processed = start_in_processed + len(content)
+                
+                # Store range for formatting (relative to current_index)
+                bold_ranges.append((current_index + start_in_processed, current_index + end_in_processed))
+                
+                # Remove the ** markers
+                processed_text = processed_text[:start_in_original - offset] + content + processed_text[start_in_original - offset + len(match.group(0)):]
+                offset += 4  # Each ** pair removed = 4 characters
+            
+            text_with_newline = processed_text + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': text_with_newline
+                }
+            })
+            
+            # Apply bold formatting - reverse order to apply from end to start
+            for start_idx, end_idx in reversed(bold_ranges):
                 requests.append({
                     'updateTextStyle': {
                         'range': {
