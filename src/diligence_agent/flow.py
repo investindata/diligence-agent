@@ -268,7 +268,7 @@ class DiligenceFlow(Flow[DiligenceState]):
                 print(f"✅ Final report completed")
             
             # Also write to Google Drive
-            document_name = f"{self.state.company_name}_Final_Report_{self.state.current_date}"
+            document_name = f"{self.state.company_name}_Final_Report"
             google_doc_url = write_final_report_to_google_doc(
                 document_name=document_name,
                 markdown_content=final_report,

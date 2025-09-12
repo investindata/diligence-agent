@@ -501,6 +501,24 @@ def _convert_markdown_to_google_docs_format(markdown_content: str) -> List[Dict]
     lines = [line for line in markdown_content.split('\n') if line.strip()]
     current_index = 1  # Start after the initial paragraph
     
+    def _add_paragraph_spacing(start_idx: int, end_idx: int):
+        """Add space after paragraph for better readability."""
+        return {
+            'updateParagraphStyle': {
+                'range': {
+                    'startIndex': start_idx,
+                    'endIndex': end_idx
+                },
+                'paragraphStyle': {
+                    'spaceAfter': {
+                        'magnitude': 6,
+                        'unit': 'PT'
+                    }
+                },
+                'fields': 'spaceAfter'
+            }
+        }
+    
     for line in lines:
         line = line.strip()
         
@@ -705,6 +723,27 @@ def _convert_markdown_to_google_docs_format(markdown_content: str) -> List[Dict]
                 'insertText': {
                     'location': {'index': current_index},
                     'text': text_with_newline
+                }
+            })
+            
+            # Add paragraph spacing for regular paragraphs
+            requests.append({
+                'updateParagraphStyle': {
+                    'range': {
+                        'startIndex': current_index,
+                        'endIndex': current_index + len(text_with_newline) - 1
+                    },
+                    'paragraphStyle': {
+                        'spaceAbove': {
+                            'magnitude': 0,
+                            'unit': 'PT'
+                        },
+                        'spaceBelow': {
+                            'magnitude': 6,
+                            'unit': 'PT'
+                        }
+                    },
+                    'fields': 'spaceAbove,spaceBelow'
                 }
             })
             
