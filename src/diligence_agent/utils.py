@@ -787,8 +787,8 @@ def write_final_report_to_google_doc(document_name: str, markdown_content: str, 
         from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
         
-        # Add timestamp to document name to prevent duplicates
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Add readable timestamp to document name
+        timestamp = datetime.now().strftime("%Y-%m-%d_%I:%M:%S%p").lower()
         timestamped_name = f"{document_name}_{timestamp}"
         
         print(f"📄 Creating Google Doc: {timestamped_name}")
