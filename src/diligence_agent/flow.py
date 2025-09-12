@@ -39,8 +39,8 @@ class DiligenceState(BaseModel):
     # execution parameters
     batch_size: int = 1
     batch_delay: float = 0.0  # seconds
-    num_search_terms: int = 1
-    num_websites: int = 1
+    num_search_terms: int = 5
+    num_websites: int = 10
 
     # section control - list of sections to run
     sections_to_run: List[str] = [
@@ -254,9 +254,9 @@ class DiligenceFlow(Flow[DiligenceState]):
             f"Using this data, write a comprehensive and well-structured investment report.\n\n"
             f"Ensure clarity and coherence in your writing. Eliminate redundancies and ensure a smooth flow between sections.\n\n"
             f"Be thorough and don't omit any details.\n\n"
-            f"Return an output in Markdown format."
+            f"Return an output in pure Markdown format without any additional thoughts or comments."
         )
-
+        
         result = await writer_agent.kickoff_async(query)
         raw_final_report = result.raw if hasattr(result, 'raw') else str(result)
         final_report = clean_markdown_output(raw_final_report)
