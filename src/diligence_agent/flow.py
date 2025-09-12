@@ -5,7 +5,7 @@ from crewai.flow.persistence import persist
 from datetime import datetime
 from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 import asyncio
-from src.diligence_agent.schemas import ReportStructure, DataSources
+from src.diligence_agent.schemas import ReportStructure, DataSources, CompanyDataSources
 from src.diligence_agent.research_flow import ResearchFlow
 from src.diligence_agent.non_research_flow import NonResearchFlow
 from src.diligence_agent.agents import organizer_agent, writer_agent
@@ -57,7 +57,7 @@ class DiligenceState(BaseModel):
     ]
 
     # data sources organizer flow
-    data_sources_file: str = "https://docs.google.com/document/d/1TZEg-gljazGMUuG1KWKoNc3PDHMGLahD5ofd1BoBWR8/edit?usp=sharing"
+    data_sources_file: str = ""
     data_sources: DataSources = DataSources(
         google_docs=[],
         pdfs=[],
@@ -86,7 +86,7 @@ class DiligenceFlow(Flow[DiligenceState]):
 
     @start()
     async def get_data_sources(self) -> DataSources:
-        """Parse Google Doc containing data sources and return structured DataSources schema"""
+        """Parse Google Doc containing data sources and extract company name"""
         if "Get Data Sources" not in self.state.sections_to_run:
             print("⏭️  Skipping data source extraction")
             return self.state.data_sources
@@ -100,14 +100,29 @@ class DiligenceFlow(Flow[DiligenceState]):
         print("=" * 80)
         
         query = (
-            f"Parse the following Google Doc content and extract data sources for company {self.state.company_name}.\n\n"
+            f"Parse the following Google Doc content and extract both the company name and data sources.\n\n"
             f"Raw content:\n{raw_data_sources}\n\n"
-            f"Extract and organize the data sources into the required structure.\n"
+            f"Extract:\n"
+            f"1. The company name (look for patterns like 'Company name: X' or similar)\n"
+            f"2. All data sources organized into the required structure\n\n"
+            f"Return both the company name and structured data sources."
         )
         
-        result = await organizer_agent.kickoff_async(query, response_format=DataSources)
-        # extract_structured_output returns DataSources instance when target_schema is provided
-        return extract_structured_output(result, DataSources)  # type: ignore
+        result = await organizer_agent.kickoff_async(query, response_format=CompanyDataSources)
+        company_data_sources = extract_structured_output(result, CompanyDataSources)  # type: ignore
+        
+        # Extract and store company name in state
+        if company_data_sources.company_name:
+            self.state.company_name = company_data_sources.company_name.strip()
+            print(f"📋 Extracted company name: {self.state.company_name}")
+        else:
+            raise ValueError("Could not extract company name from the data sources document. Please ensure the document contains 'Company name: [Name]' or similar.")
+        
+        # Extract and store data sources in state (only the DataSources part)
+        self.state.data_sources = company_data_sources.data_sources
+        
+        # Return only the DataSources for the flow
+        return self.state.data_sources
 
 
     @listen(get_data_sources)
@@ -282,11 +297,12 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.final_report
 
 
-async def kickoff(flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False) -> Any:
+async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False) -> Any:
     """
     Run the diligence flow with optional flow ID and specific sections.
     
     Args:
+        data_sources_file: Google Doc URL containing company data sources (required for new flows)
         flow_id: Optional flow ID to resume existing flow
         sections: Optional list of specific sections to run
         clear_cache: Whether to clear the cache before running
@@ -302,21 +318,30 @@ async def kickoff(flow_id: Optional[str] = None, sections: Optional[List[str]] =
     
     # Prepare inputs
     if flow_id:
+        # Resuming existing flow
         inputs = {"id": flow_id}
+        print(f"🔄 Resuming existing flow: {flow_id}")
         
         # Override sections if specified
         if sections:
             print(f"🎯 Running specific sections: {sections}")
-            
-            
             inputs["sections_to_run"] = sections # type: ignore
             print(f"📋 Sections to run: {sections}")
     else:
-        # No flow ID provided, start fresh - run all sections by default
+        # No flow ID provided, start fresh
+        if not data_sources_file:
+            raise ValueError("data_sources_file is required for new flows. Please provide a Google Doc URL containing company data sources.")
+        
         inputs = {
-            "company_name": "tensorstax",
+            "data_sources_file": data_sources_file,
             "current_date": datetime.now().strftime("%Y-%m-%d"),
         }
+        print(f"📄 Starting new flow with data sources: {data_sources_file}")
+        
+        # Override sections if specified for new flows
+        if sections:
+            print(f"🎯 Running specific sections: {sections}")
+            inputs["sections_to_run"] = sections # type: ignore
     
     result = await diligence_flow.kickoff_async(inputs=inputs)
     flow_id = getattr(diligence_flow.state, 'id', 'unknown')
@@ -346,15 +371,38 @@ def plot():
     diligence_flow.plot("task_outputs/DiligenceFlowPlot")
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    # Parse command line arguments
-    flow_id = sys.argv[1] if len(sys.argv) > 1 else None
-    sections = sys.argv[2:] if len(sys.argv) > 2 else None
+    parser = argparse.ArgumentParser(description='Run Diligence Agent flow-based analysis')
+    parser.add_argument('--sources', type=str, help='Google Doc URL containing company data sources (required for new flows)')
+    parser.add_argument('--flow_id', type=str, help='Flow ID to resume existing flow')
+    parser.add_argument('--sections', type=str, help='Comma-separated list of sections to run (e.g., "Final Report,Market")')
+    parser.add_argument('--clear_cache', action='store_true', help='Clear search/scraping cache before running')
+    
+    args = parser.parse_args()
+    
+    # Parse sections if provided
+    sections = None
+    if args.sections:
+        sections = [s.strip() for s in args.sections.split(',')]
     
     # Run the flow with parsed arguments
-    asyncio.run(kickoff(flow_id=flow_id, sections=sections))
-
-    plot()
+    try:
+        asyncio.run(kickoff(
+            data_sources_file=args.sources,
+            flow_id=args.flow_id, 
+            sections=sections,
+            clear_cache=args.clear_cache
+        ))
+        plot()
+    except ValueError as e:
+        print(f"❌ Error: {e}")
+        print("💡 Use --help for usage information")
+        exit(1)
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
 
 

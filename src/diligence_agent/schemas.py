@@ -158,4 +158,8 @@ class DataSources(BaseModel):
     websites: List[str] = Field([], description="List of website URLs used as data sources")
     slack_channels: List[str] = Field([], description="List of Slack channel IDs used as data sources")
 
+class CompanyDataSources(BaseModel):
+    company_name: str = Field(..., description="Name of the company extracted from the document")
+    data_sources: DataSources = Field(..., description="Data sources for the company")
+
 
