@@ -34,6 +34,8 @@ show_help() {
     echo "  --flow_id=\"<id>\"           # Resume existing flow with this ID"
     echo "  --sections=\"<sections>\"     # Comma-separated list of sections to run"
     echo "                             # Available: Company Overview,Product,Market,Founders,Final Report"
+    echo "  --search_terms=<n>       # Number of search terms to generate for research (default: 5)"
+    echo "  --websites=<n>           # Number of websites to scrape per search (default: 10)"
     echo "  --clear_cache            # Clear search/scraping cache before running"
     echo ""
     echo "Examples:"
@@ -51,6 +53,8 @@ show_help() {
 SOURCES=""
 FLOW_ID=""
 SECTIONS=""
+SEARCH_TERMS=""
+WEBSITES=""
 CLEAR_CACHE=""
 
 while [[ $# -gt 0 ]]; do
@@ -69,6 +73,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --sections=*)
             SECTIONS="${1#*=}"
+            shift
+            ;;
+        --search_terms=*)
+            SEARCH_TERMS="${1#*=}"
+            shift
+            ;;
+        --websites=*)
+            WEBSITES="${1#*=}"
             shift
             ;;
         --clear_cache)
@@ -112,6 +124,16 @@ fi
 if [[ -n "$SECTIONS" ]]; then
     PYTHON_ARGS+=("--sections" "$SECTIONS")
     echo -e "${BLUE}Running sections: $SECTIONS${NC}"
+fi
+
+if [[ -n "$SEARCH_TERMS" ]]; then
+    PYTHON_ARGS+=("--search_terms" "$SEARCH_TERMS")
+    echo -e "${BLUE}Using $SEARCH_TERMS search terms${NC}"
+fi
+
+if [[ -n "$WEBSITES" ]]; then
+    PYTHON_ARGS+=("--websites" "$WEBSITES")
+    echo -e "${BLUE}Scraping $WEBSITES websites per search${NC}"
 fi
 
 if [[ -n "$CLEAR_CACHE" ]]; then

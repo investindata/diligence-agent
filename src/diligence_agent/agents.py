@@ -1,7 +1,7 @@
 from crewai import Agent
 from crewai.llm import LLM
-from src.diligence_agent.tools.cached_serper_tools import CachedSerperDevTool, CachedSerperScrapeWebsiteTool
-from src.diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
+from diligence_agent.tools.cached_serper_tools import CachedSerperDevTool, CachedSerperScrapeWebsiteTool
+from diligence_agent.tools.simple_auth_helper import SimpleLinkedInAuthTool
 
 
 

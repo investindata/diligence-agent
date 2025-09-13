@@ -36,7 +36,7 @@ class DueDiligenceUI:
             print(f"Error getting companies: {e}")
             return []
     
-    def run_analysis(self, data_sources_url: str, progress_callback=None) -> str:
+    def run_analysis(self, data_sources_url: str, num_search_terms: int = 5, num_websites: int = 10, progress_callback=None) -> str:
         """Run the diligence analysis using the flow system with data sources URL"""
         if not data_sources_url:
             return "No data sources URL provided"
@@ -47,7 +47,11 @@ class DueDiligenceUI:
             
             # Run the analysis using the flow system directly
             async def run_flow():
-                return await kickoff(data_sources_file=data_sources_url)
+                return await kickoff(
+                    data_sources_file=data_sources_url,
+                    num_search_terms=num_search_terms,
+                    num_websites=num_websites
+                )
             
             # Create a new event loop for the async call
             import asyncio
@@ -292,6 +296,29 @@ class DueDiligenceUI:
                         interactive=True
                     )
                     
+                    # Research parameters
+                    gr.Markdown("**Research Parameters**")
+                    
+                    search_terms_slider = gr.Slider(
+                        label="Search Terms",
+                        minimum=1,
+                        maximum=20,
+                        value=5,
+                        step=1,
+                        info="Number of search terms to generate for research",
+                        interactive=True
+                    )
+                    
+                    websites_slider = gr.Slider(
+                        label="Websites per Search",
+                        minimum=1,
+                        maximum=50,
+                        value=10,
+                        step=1,
+                        info="Number of websites to scrape per search term",
+                        interactive=True
+                    )
+                    
                     # Add Run Analysis button
                     run_analysis_btn = gr.Button(
                         "Run Analysis",
@@ -351,7 +378,7 @@ class DueDiligenceUI:
                 """Update report content when company or report type changes"""
                 return self.load_report_content(company_name, report_type)
             
-            def run_analysis_handler(data_sources_url):
+            def run_analysis_handler(data_sources_url, search_terms, websites):
                 """Handle the run analysis button click"""
                 if not data_sources_url:
                     return (
@@ -376,7 +403,7 @@ class DueDiligenceUI:
                 
                 # Run the analysis in a separate thread
                 def run_in_background():
-                    return self.run_analysis(data_sources_url, progress_callback)
+                    return self.run_analysis(data_sources_url, search_terms, websites, progress_callback)
                 
                 import concurrent.futures
                 import time
@@ -434,7 +461,7 @@ class DueDiligenceUI:
             # Run analysis button handler
             run_analysis_btn.click(
                 fn=run_analysis_handler,
-                inputs=[data_sources_input],
+                inputs=[data_sources_input, search_terms_slider, websites_slider],
                 outputs=[run_analysis_btn, progress_display, company_dropdown, report_type_dropdown, report_display]
             )
             

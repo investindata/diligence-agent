@@ -1,9 +1,9 @@
 from pydantic import BaseModel
 from typing import Any
 from crewai.flow.flow import Flow, listen, start
-from src.diligence_agent.utils import extract_structured_output, get_schema_for_section
-from src.diligence_agent.agents import search_agent, scraper_agent, writer_agent
-from src.diligence_agent.schemas import ReportStructure
+from diligence_agent.utils import extract_structured_output, get_schema_for_section
+from diligence_agent.agents import search_agent, scraper_agent, writer_agent
+from diligence_agent.schemas import ReportStructure
 import asyncio
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")

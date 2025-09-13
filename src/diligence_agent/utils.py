@@ -278,7 +278,7 @@ def get_shared_playwright_tools():
     """Get shared Playwright tools to avoid multiple browser instances."""
     global _SHARED_PLAYWRIGHT_TOOLS
     if _SHARED_PLAYWRIGHT_TOOLS is None:
-        from src.diligence_agent.mcp_config import get_playwright_tools_with_auth
+        from diligence_agent.mcp_config import get_playwright_tools_with_auth
         _SHARED_PLAYWRIGHT_TOOLS = get_playwright_tools_with_auth()
     return _SHARED_PLAYWRIGHT_TOOLS
 
@@ -297,7 +297,7 @@ def fetch_slack_channel_data(channels: list) -> str:
     Returns:
         Formatted string containing all channel data
     """
-    from src.diligence_agent.mcp_config import get_slack_tools
+    from diligence_agent.mcp_config import get_slack_tools
     
     all_slack_content = ""
     slack_tools = get_slack_tools()
@@ -445,7 +445,7 @@ def join_names_with_and(name_list):
 
 
 # Centralized section configuration
-from src.diligence_agent.schemas import Founders, CompetitiveLandscape, Market, Product, WhyInteresting, CompanyOverview, ReportConclusion
+from diligence_agent.schemas import Founders, CompetitiveLandscape, Market, Product, WhyInteresting, CompanyOverview, ReportConclusion
 
 SECTION_CONFIG = {
     "Founders": {

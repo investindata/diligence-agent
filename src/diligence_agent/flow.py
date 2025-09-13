@@ -3,13 +3,13 @@ from typing import Dict, Any, Optional, List
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 from datetime import datetime
-from src.diligence_agent.tools.google_doc_processor import GoogleDocProcessor
+from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 import asyncio
-from src.diligence_agent.schemas import ReportStructure, DataSources, CompanyDataSources
-from src.diligence_agent.research_flow import ResearchFlow
-from src.diligence_agent.non_research_flow import NonResearchFlow
-from src.diligence_agent.agents import organizer_agent, writer_agent
-from src.diligence_agent.utils import (
+from diligence_agent.schemas import ReportStructure, DataSources, CompanyDataSources
+from diligence_agent.research_flow import ResearchFlow
+from diligence_agent.non_research_flow import NonResearchFlow
+from diligence_agent.agents import organizer_agent, writer_agent
+from diligence_agent.utils import (
     execute_subflows_and_map_results,
     extract_structured_output,
     fetch_slack_channel_data,
@@ -39,8 +39,8 @@ class DiligenceState(BaseModel):
     # execution parameters
     batch_size: int = 1
     batch_delay: float = 0.0  # seconds
-    num_search_terms: int = 5
-    num_websites: int = 10
+    num_search_terms: int = 1
+    num_websites: int = 1
 
     # section control - list of sections to run
     sections_to_run: List[str] = [
@@ -160,7 +160,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         # Process Websites
         if data_sources.websites:
             print(f"🌐 Processing {len(data_sources.websites)} website(s)...")
-            from src.diligence_agent.tools.cached_serper_tools import cached_serper_scraper
+            from diligence_agent.tools.cached_serper_tools import cached_serper_scraper
             for i, website_url in enumerate(data_sources.websites):
                 print(f"  🌐 Processing website {i+1}/{len(data_sources.websites)}: {website_url}")
                 raw_content = cached_serper_scraper._run(url=website_url)
@@ -297,7 +297,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.final_report
 
 
-async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False) -> Any:
+async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10) -> Any:
     """
     Run the diligence flow with optional flow ID and specific sections.
     
@@ -309,7 +309,7 @@ async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str
     """
     # Clear cache if requested
     if clear_cache:
-        from src.diligence_agent.tools.cached_serper_tools import cached_serper_search, cached_serper_scraper
+        from diligence_agent.tools.cached_serper_tools import cached_serper_search, cached_serper_scraper
         cached_serper_search.clear_cache()
         cached_serper_scraper.clear_cache()
         print("🗑️ Cache cleared")
@@ -335,6 +335,8 @@ async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str
         inputs = {
             "data_sources_file": data_sources_file,
             "current_date": datetime.now().strftime("%Y-%m-%d"),
+            "num_search_terms": num_search_terms,
+            "num_websites": num_websites,
         }
         print(f"📄 Starting new flow with data sources: {data_sources_file}")
         
@@ -353,7 +355,7 @@ async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str
     
     # Show cache performance stats
     try:
-        from src.diligence_agent.tools.cached_serper_tools import print_cache_stats
+        from diligence_agent.tools.cached_serper_tools import print_cache_stats
         print_cache_stats()
     except Exception as e:
         print(f"❌ Error showing cache stats: {e}")
@@ -378,6 +380,8 @@ if __name__ == "__main__":
     parser.add_argument('--flow_id', type=str, help='Flow ID to resume existing flow')
     parser.add_argument('--sections', type=str, help='Comma-separated list of sections to run (e.g., "Final Report,Market")')
     parser.add_argument('--clear_cache', action='store_true', help='Clear search/scraping cache before running')
+    parser.add_argument('--search_terms', type=int, default=5, help='Number of search terms to generate for research (default: 5)')
+    parser.add_argument('--websites', type=int, default=10, help='Number of websites to scrape per search (default: 10)')
     
     args = parser.parse_args()
     
@@ -392,7 +396,9 @@ if __name__ == "__main__":
             data_sources_file=args.sources,
             flow_id=args.flow_id, 
             sections=sections,
-            clear_cache=args.clear_cache
+            clear_cache=args.clear_cache,
+            num_search_terms=args.search_terms,
+            num_websites=args.websites
         ))
         plot()
     except ValueError as e:

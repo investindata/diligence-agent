@@ -66,6 +66,9 @@ Flow steps are defined in `src/diligence_agent/flow.py`:
 # Run specific sections only
 ./diligence --flow_id FLOW_ID --sections "Final Report,Market"
 
+# Configure research parameters
+./diligence --sources "URL" --search_terms 10 --websites 20
+
 # Clear cache before running
 ./diligence --sources "URL" --clear_cache
 ```
