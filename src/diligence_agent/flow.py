@@ -41,6 +41,7 @@ class DiligenceState(BaseModel):
     batch_delay: float = 0.0  # seconds
     num_search_terms: int = 1
     num_websites: int = 1
+    model: str = "gpt-4.1-mini"
 
     # section control - list of sections to run
     sections_to_run: List[str] = [
@@ -297,7 +298,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.final_report
 
 
-async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10) -> Any:
+async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini") -> Any:
     """
     Run the diligence flow with optional flow ID and specific sections.
     
@@ -337,6 +338,7 @@ async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str
             "current_date": datetime.now().strftime("%Y-%m-%d"),
             "num_search_terms": num_search_terms,
             "num_websites": num_websites,
+            "model": model,
         }
         print(f"📄 Starting new flow with data sources: {data_sources_file}")
         
@@ -382,6 +384,7 @@ if __name__ == "__main__":
     parser.add_argument('--clear_cache', action='store_true', help='Clear search/scraping cache before running')
     parser.add_argument('--search_terms', type=int, default=5, help='Number of search terms to generate for research (default: 5)')
     parser.add_argument('--websites', type=int, default=10, help='Number of websites to scrape per search (default: 10)')
+    parser.add_argument('--model', type=str, default='gpt-4.1-mini', choices=['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-4.1'], help='LLM model to use (default: gpt-4.1-mini)')
     
     args = parser.parse_args()
     
@@ -398,7 +401,8 @@ if __name__ == "__main__":
             sections=sections,
             clear_cache=args.clear_cache,
             num_search_terms=args.search_terms,
-            num_websites=args.websites
+            num_websites=args.websites,
+            model=args.model
         ))
         plot()
     except ValueError as e:

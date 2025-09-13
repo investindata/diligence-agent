@@ -69,6 +69,9 @@ Flow steps are defined in `src/diligence_agent/flow.py`:
 # Configure research parameters
 ./diligence --sources "URL" --search_terms 10 --websites 20
 
+# Use specific model
+./diligence --sources "URL" --model gpt-4.1
+
 # Clear cache before running
 ./diligence --sources "URL" --clear_cache
 ```
@@ -145,10 +148,10 @@ Generated in `task_outputs/COMPANY_NAME/`:
 
 ### Model Configuration
 
-- Default: `gpt-4o-mini` (cost-effective)
-- Available: `gpt-4.1`, `gpt-4.1-mini`
+- Default: `gpt-4.1-mini` (balanced performance and cost)
+- Available: `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1`
 - Temperature: 0.0-0.1 for consistent analysis
-- Configurable via `--model` and `--temperature` flags
+- Configurable via `--model` parameter in CLI and UI
 
 ### Async Execution
 

@@ -36,6 +36,7 @@ show_help() {
     echo "                             # Available: Company Overview,Product,Market,Founders,Final Report"
     echo "  --search_terms=<n>       # Number of search terms to generate for research (default: 5)"
     echo "  --websites=<n>           # Number of websites to scrape per search (default: 10)"
+    echo "  --model=<model>          # LLM model to use: gpt-4o-mini, gpt-4.1-mini, gpt-4.1 (default: gpt-4.1-mini)"
     echo "  --clear_cache            # Clear search/scraping cache before running"
     echo ""
     echo "Examples:"
@@ -55,6 +56,7 @@ FLOW_ID=""
 SECTIONS=""
 SEARCH_TERMS=""
 WEBSITES=""
+MODEL=""
 CLEAR_CACHE=""
 
 while [[ $# -gt 0 ]]; do
@@ -81,6 +83,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --websites=*)
             WEBSITES="${1#*=}"
+            shift
+            ;;
+        --model=*)
+            MODEL="${1#*=}"
             shift
             ;;
         --clear_cache)
@@ -134,6 +140,11 @@ fi
 if [[ -n "$WEBSITES" ]]; then
     PYTHON_ARGS+=("--websites" "$WEBSITES")
     echo -e "${BLUE}Scraping $WEBSITES websites per search${NC}"
+fi
+
+if [[ -n "$MODEL" ]]; then
+    PYTHON_ARGS+=("--model" "$MODEL")
+    echo -e "${BLUE}Using model: $MODEL${NC}"
 fi
 
 if [[ -n "$CLEAR_CACHE" ]]; then

@@ -36,7 +36,7 @@ class DueDiligenceUI:
             print(f"Error getting companies: {e}")
             return []
     
-    def run_analysis(self, data_sources_url: str, num_search_terms: int = 5, num_websites: int = 10, progress_callback=None) -> str:
+    def run_analysis(self, data_sources_url: str, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback=None) -> str:
         """Run the diligence analysis using the flow system with data sources URL"""
         if not data_sources_url:
             return "No data sources URL provided"
@@ -50,7 +50,8 @@ class DueDiligenceUI:
                 return await kickoff(
                     data_sources_file=data_sources_url,
                     num_search_terms=num_search_terms,
-                    num_websites=num_websites
+                    num_websites=num_websites,
+                    model=model
                 )
             
             # Create a new event loop for the async call
@@ -319,6 +320,14 @@ class DueDiligenceUI:
                         interactive=True
                     )
                     
+                    model_dropdown = gr.Dropdown(
+                        label="Model",
+                        choices=["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
+                        value="gpt-4.1-mini",
+                        info="LLM model to use for analysis",
+                        interactive=True
+                    )
+                    
                     # Add Run Analysis button
                     run_analysis_btn = gr.Button(
                         "Run Analysis",
@@ -378,7 +387,7 @@ class DueDiligenceUI:
                 """Update report content when company or report type changes"""
                 return self.load_report_content(company_name, report_type)
             
-            def run_analysis_handler(data_sources_url, search_terms, websites):
+            def run_analysis_handler(data_sources_url, search_terms, websites, model):
                 """Handle the run analysis button click"""
                 if not data_sources_url:
                     return (
@@ -403,7 +412,7 @@ class DueDiligenceUI:
                 
                 # Run the analysis in a separate thread
                 def run_in_background():
-                    return self.run_analysis(data_sources_url, search_terms, websites, progress_callback)
+                    return self.run_analysis(data_sources_url, search_terms, websites, model, progress_callback)
                 
                 import concurrent.futures
                 import time
@@ -461,7 +470,7 @@ class DueDiligenceUI:
             # Run analysis button handler
             run_analysis_btn.click(
                 fn=run_analysis_handler,
-                inputs=[data_sources_input, search_terms_slider, websites_slider],
+                inputs=[data_sources_input, search_terms_slider, websites_slider, model_dropdown],
                 outputs=[run_analysis_btn, progress_display, company_dropdown, report_type_dropdown, report_display]
             )
             
