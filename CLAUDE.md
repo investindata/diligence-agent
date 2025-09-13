@@ -4,43 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DiligenceAgent is a multi-agent AI system powered by CrewAI that automates investment due diligence for startup companies. The system processes company questionnaires, Slack conversations, and web research to generate comprehensive investment reports with 10 structured outputs.
+DiligenceAgent is a flow-based AI system powered by CrewAI that automates investment due diligence for startup companies. The system processes Google Docs, websites, PDFs, and Slack conversations to generate comprehensive investment reports with structured outputs.
 
 ## Architecture
 
 ### Core Components
 
-**Flow-Based Architecture (Primary)**:
+**Flow-Based Architecture**:
 - `src/diligence_agent/flow.py` - Main DiligenceFlow using CrewAI Flow framework
-- `src/diligence_agent/research_flow.py` - ResearchFlow for web research tasks
+- `src/diligence_agent/research_flow.py` - ResearchFlow for web research tasks  
+- `src/diligence_agent/non_research_flow.py` - NonResearchFlow for analysis tasks
 - Sequential data processing with async execution support
-
-**Crew-Based Architecture (Legacy)**:
-- `src/diligence_agent/crew.py` - DiligenceAgent crew with parallel/sequential task execution
-- `src/diligence_agent/main.py` - Entry point with CLI interface and company selection
+- LLM-based company name extraction from data sources documents
 
 ### Agent System (5 specialized agents)
 
-All agents are defined in `src/diligence_agent/config/agents.yaml`:
-- **data_organizer**: Validates and structures raw data from multiple sources
-- **section_writer**: Writes specific report sections (overview, product, market, etc.)
-- **report_writer**: Compiles sections into cohesive investment report
-- **investment_decision_maker**: Creates executive summary with GO/NO-GO recommendations
-- **founder_assessor**: Conducts background checks and founder due diligence
+All agents are defined in `src/diligence_agent/agents.py`:
+- **organizer_agent**: Validates and structures raw data from multiple sources
+- **search_agent**: Web research and data gathering
+- **scraper_agent**: Website content extraction
+- **writer_agent**: Writes specific report sections and compiles final reports
+- **linkedin_agent**: Founder background checks and verification
 
-### Task Pipeline (10 sequential tasks)
+### Flow Pipeline (10 sequential flow steps)
 
-Tasks are configured in `src/diligence_agent/config/tasks.yaml`:
-1. **data_organizer_task**: JSON validation of company data
-2. **overview_section_writer_task**: Company overview and mission
-3. **why_interesting_section_writer_task**: Investment thesis
-4. **product_section_writer_task**: Product/service analysis
-5. **market_section_writer_task**: Market size and dynamics
-6. **competitive_landscape_section_writer_task**: Competitive analysis
-7. **team_section_writer_task**: Team backgrounds
-8. **founder_assessment_task**: Founder background verification and rating
-9. **report_writer_task**: Compiled full report
-10. **executive_summary_task**: Final investment recommendation
+Flow steps are defined in `src/diligence_agent/flow.py`:
+1. **Get Data Sources**: Extract company name and data sources from Google Doc
+2. **Parse Data Sources**: Process Google Docs, websites, PDFs, Slack channels
+3. **Company Overview**: Company background and mission analysis
+4. **Product**: Product/service analysis with competitive research
+5. **Competitive Landscape**: Market positioning and competitor analysis
+6. **Market**: Market size, dynamics, and opportunity assessment
+7. **Founders**: Team backgrounds and founder verification
+8. **Why Interesting**: Investment thesis and rationale
+9. **Report Conclusion**: Summary and investment recommendation
+10. **Final Report**: Complete formatted investment report
 
 ### Key Data Structures
 
@@ -57,38 +55,39 @@ Tasks are configured in `src/diligence_agent/config/tasks.yaml`:
 
 ### Running Analysis
 
-**Interactive Mode**:
-```bash
-crewai run
-# or
-python -m diligence_agent.main
-```
-
-**Command Line**:
-```bash
-crewai run tensorstax baseten          # Multiple companies
-crewai run --all                       # All companies
-crewai run --list                      # List available companies
-```
-
 **Flow-based execution**:
 ```bash
-python src/diligence_agent/flow.py                    # Run full flow
-python src/diligence_agent/flow.py FLOW_ID            # Resume specific flow
-python src/diligence_agent/flow.py FLOW_ID "Final Report"  # Run specific section
-python src/diligence_agent/flow.py FLOW_ID "Market" "Product"  # Run multiple sections
+# Run full flow with data sources URL
+./diligence --sources "https://docs.google.com/document/d/DOCUMENT_ID/edit"
+
+# Resume specific flow
+./diligence --flow_id FLOW_ID
+
+# Run specific sections only
+./diligence --flow_id FLOW_ID --sections "Final Report,Market"
+
+# Clear cache before running
+./diligence --sources "URL" --clear_cache
+```
+
+**Direct Python execution**:
+```bash
+python src/diligence_agent/flow.py --sources "URL"           # Run full flow
+python src/diligence_agent/flow.py --flow_id FLOW_ID         # Resume flow
+python src/diligence_agent/flow.py --flow_id FLOW_ID --sections "Market,Product"  # Specific sections
 ```
 
 ### Testing
 
 ```bash
 pytest tests/                          # Run all tests
-pytest tests/test_main.py              # Specific test file
+pytest tests/test_flow_basic.py        # Flow-specific tests
 python -m pytest -v                    # Verbose output
 ```
 
 **Test Structure**:
 - Integration tests in `tests/test_*.py`
+- Flow tests in `tests/test_flow_basic.py`
 - Fixtures in `tests/conftest.py`
 - Sample data in `tests/fixtures/`
 
@@ -111,18 +110,25 @@ Required in `.env`:
 
 ### Input Data Structure
 
-Company data stored in `input_sources/`:
-- JSON files with company information (e.g., `tensorstax.json`, `baseten.json`)
-- Referenced by filename without extension in commands
+Data sources specified in Google Docs containing:
+- **Company name**: Extracted via LLM from document content
+- **Google docs**: List of Google Doc URLs
+- **Websites**: List of website URLs to scrape
+- **PDFs**: List of PDF file URLs or paths
+- **Slack channels**: List of Slack channel IDs
 
 ### Output Structure
 
-Generated in `output/session_TIMESTAMP/COMPANY_NAME/`:
-- `1_data_validation.json` - Structured company data
-- `2_overview_section.md` through `7_team_section.md` - Report sections
-- `8_founder_assessment.md` - Founder due diligence
-- `9_full_diligence_report.md` - Compiled report
-- `10_executive_summary.md` - Final investment decision
+Generated in `task_outputs/COMPANY_NAME/`:
+- `1.company_overview.md` - Company background analysis
+- `2.product.md` - Product/service analysis
+- `3.competitive_landscape.md` - Competition analysis
+- `4.market.md` - Market analysis
+- `5.founders.md` - Founder background verification
+- `6.why_interesting.md` - Investment thesis
+- `7.report_conclusion.md` - Investment recommendation
+- `8.final_report.md` - Complete formatted report
+- Google Doc automatically created in source document's Drive folder
 
 ## Tools and Integrations
 
@@ -150,12 +156,20 @@ Generated in `output/session_TIMESTAMP/COMPANY_NAME/`:
 ## Key Files to Understand
 
 - `src/diligence_agent/flow.py` - Main execution flow and state management
-- `src/diligence_agent/crew.py` - Agent and task definitions
-- `src/diligence_agent/main.py` - CLI interface and company processing
-- `src/diligence_agent/utils.py` - Common utilities and helper functions
-- `src/diligence_agent/input_reader.py` - Company data input processing
+- `src/diligence_agent/research_flow.py` - Research tasks (overview, product, market, etc.)
+- `src/diligence_agent/non_research_flow.py` - Analysis tasks (why interesting, conclusion)
+- `src/diligence_agent/agents.py` - Agent definitions and configurations
+- `src/diligence_agent/utils.py` - Utilities including Google Docs integration
+- `src/diligence_agent/ui.py` - Gradio web interface
+- `./diligence` - CLI script for running flows
 
-## Recent Improvements
+## Recent Major Refactoring (2025-09-13)
+
+### Deprecated Crew-Based Architecture
+- Removed `crew.py`, `main.py`, `workflow.py` and related files
+- Migrated fully to flow-based architecture
+- Updated CLI interface to use `./diligence` script
+- Simplified project structure and dependencies
 
 ### Google Docs Integration (2025-09-12)
 

@@ -7,67 +7,68 @@ import threading
 import subprocess
 import sys
 import json
+import asyncio
 from datetime import datetime
 
-from diligence_agent.input_reader import InputReader
-from diligence_agent.crew import default_model, default_temperature, AVAILABLE_MODELS
+from diligence_agent.flow import kickoff
 
 
 class DueDiligenceUI:
     """Gradio UI for running analysis and viewing investment reports"""
     
     def __init__(self):
-        self.input_reader = InputReader()
+        pass
         
     def get_available_companies(self) -> List[str]:
-        """Get all companies from input_sources directory"""
+        """Get all companies that have existing reports from task_outputs directory"""
         try:
-            available = self.input_reader.list_available_companies()
-            companies = [c.replace('.json', '') for c in available]
+            task_outputs_dir = Path("task_outputs")
+            if not task_outputs_dir.exists():
+                return []
+            
+            companies = []
+            for company_dir in task_outputs_dir.iterdir():
+                if company_dir.is_dir():
+                    companies.append(company_dir.name)
+            
             return sorted(companies)
         except Exception as e:
             print(f"Error getting companies: {e}")
             return []
     
-    def run_analysis(self, company_name: str, model: str, temperature: float, progress_callback=None) -> str:
-        """Run the diligence analysis for a company with specified model and temperature"""
-        if not company_name:
-            return "No company selected"
+    def run_analysis(self, data_sources_url: str, progress_callback=None) -> str:
+        """Run the diligence analysis using the flow system with data sources URL"""
+        if not data_sources_url:
+            return "No data sources URL provided"
         
         try:
             if progress_callback:
-                progress_callback("Starting analysis...")
+                progress_callback("Starting flow-based analysis...")
             
-            # Run the analysis using subprocess with model and temperature parameters
-            cmd = [sys.executable, "-m", "diligence_agent", company_name, "--model", model, "--temperature", str(temperature)]
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
+            # Run the analysis using the flow system directly
+            async def run_flow():
+                return await kickoff(data_sources_file=data_sources_url)
             
-            output_lines = []
-            for line in process.stdout:
-                output_lines.append(line.strip())
-                if progress_callback:
-                    progress_callback(f"Running... (latest: {line.strip()[:100]}...)")
+            # Create a new event loop for the async call
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
             
-            process.wait()
+            if progress_callback:
+                progress_callback("Running flow analysis...")
             
-            if process.returncode == 0:
-                if progress_callback:
-                    progress_callback("Analysis completed successfully!")
-                return "\n".join(output_lines)
-            else:
-                if progress_callback:
-                    progress_callback(f"Analysis failed with return code {process.returncode}")
-                return f"Analysis failed with return code {process.returncode}\n" + "\n".join(output_lines)
+            result = loop.run_until_complete(run_flow())
+            
+            if progress_callback:
+                progress_callback("Flow analysis completed successfully!")
+            
+            return f"Analysis completed successfully! Flow ID: {getattr(result, 'id', 'unknown')}"
                 
         except Exception as e:
-            error_msg = f"Error running analysis: {str(e)}"
+            error_msg = f"Error running flow analysis: {str(e)}"
             if progress_callback:
                 progress_callback(error_msg)
             return error_msg
@@ -84,74 +85,47 @@ class DueDiligenceUI:
         return companies_with_reports
     
     def get_available_reports(self, company_name: str) -> List[Dict[str, str]]:
-        """Get all available reports for a company"""
+        """Get all available reports for a company from task_outputs directory"""
         if not company_name:
             return []
             
-        output_dir = Path("output")
-        if not output_dir.exists():
-            return []
-        
-        # Scan all session directories
-        session_dirs = list(output_dir.glob("session_*"))
-        if not session_dirs:
+        # Look in task_outputs directory (new flow-based structure)
+        task_outputs_dir = Path("task_outputs") / company_name
+        if not task_outputs_dir.exists():
             return []
         
         reports = []
         
-        # Look in company subdirectories (new structure)
-        for session_dir in session_dirs:
-            # Convert company name to folder name format (lowercase with underscores)
-            company_folder_name = company_name.replace(' ', '_').lower()
-            company_dir = session_dir / company_folder_name
+        # Find all files that match the numbered pattern
+        for file_path in task_outputs_dir.glob("[0-9]*"):
+            filename = file_path.name
             
-            if not company_dir.exists():
-                continue
-                
-            # Find all files that match the numbered pattern
-            for file_path in company_dir.glob("[0-9]*"):
-                filename = file_path.name
-                
-                # Extract report type from filename
-                # Format: {number}_{description}.{ext}
-                # e.g., "8_founder_assessment.md" -> "Founder Assessment"
-                
-                # Extract number and description (e.g., "8_founder_assessment.md" -> "8", "founder_assessment.md")
-                number_prefix = ""
-                if "_" in filename:
-                    parts = filename.split("_", 1)
-                    if parts[0].isdigit():
-                        number_prefix = parts[0] + ". "
-                        name_parts = parts[1]
-                    else:
-                        name_parts = filename
+            # Extract report type from filename
+            # Format: {number}.{description}.{ext}
+            # e.g., "8.final_report.md" -> "Final Report"
+            
+            # Extract number and description
+            number_prefix = ""
+            if "." in filename:
+                parts = filename.split(".", 2)  # Split into at most 3 parts: number, description, extension
+                if len(parts) >= 2 and parts[0].isdigit():
+                    number_prefix = parts[0] + ". "
+                    name_parts = parts[1]
                 else:
-                    name_parts = filename
-                
-                # Remove file extension and convert to readable format
-                report_name = name_parts.rsplit(".", 1)[0]  # Remove extension
-                report_type = number_prefix + report_name.replace("_", " ").title()
-                
-                reports.append({
-                    "type": report_type,
-                    "path": str(file_path),
-                    "filename": filename
-                })
-        
-        # Remove duplicates and return most recent for each type
-        unique_reports = {}
-        for report in reports:
-            report_type = report["type"]
-            if report_type not in unique_reports:
-                unique_reports[report_type] = report
+                    name_parts = filename.rsplit(".", 1)[0]  # Remove extension only
             else:
-                # Keep the most recent file
-                current_path = Path(unique_reports[report_type]["path"])
-                new_path = Path(report["path"])
-                if new_path.stat().st_mtime > current_path.stat().st_mtime:
-                    unique_reports[report_type] = report
+                name_parts = filename
+            
+            # Convert to readable format
+            report_type = number_prefix + name_parts.replace("_", " ").title()
+            
+            reports.append({
+                "type": report_type,
+                "path": str(file_path),
+                "filename": filename
+            })
         
-        return list(unique_reports.values())
+        return reports
     
     def find_latest_report_by_filename(self, filename: str, session_dirs: List[Path]) -> Optional[Path]:
         """Find the latest version of a specific report file across sessions"""
@@ -241,13 +215,11 @@ class DueDiligenceUI:
             
             # Default markdown formatting with full metadata
             mod_time = datetime.fromtimestamp(report_path.stat().st_mtime)
-            session_name = report_path.parent.name
             
             metadata_header = f"""---
 **Company:** {company_name}  
 **Report Type:** {report_type}  
 **Report File:** `{report_path.name}`  
-**Session:** {session_name}  
 **Last Updated:** {mod_time.strftime('%Y-%m-%d %H:%M:%S')}  
 ---
 
@@ -310,7 +282,24 @@ class DueDiligenceUI:
             
             with gr.Row():
                 with gr.Column(scale=1):
-                    gr.Markdown("### Selection")
+                    gr.Markdown("### Analysis")
+                    
+                    # Data Sources URL input
+                    data_sources_input = gr.Textbox(
+                        label="Data Sources URL",
+                        placeholder="Paste Google Doc URL containing company data sources...",
+                        lines=2,
+                        interactive=True
+                    )
+                    
+                    # Add Run Analysis button
+                    run_analysis_btn = gr.Button(
+                        "Run Analysis",
+                        interactive=True,
+                        variant="primary"
+                    )
+                    
+                    gr.Markdown("### View Reports")
                     
                     # Show all companies for selection
                     all_companies = self.get_available_companies()
@@ -319,31 +308,6 @@ class DueDiligenceUI:
                         choices=all_companies,
                         value=None,  # Start with no selection
                         interactive=True
-                    )
-                    
-                    # Model selection dropdown
-                    model_dropdown = gr.Dropdown(
-                        label="Select Model",
-                        choices=AVAILABLE_MODELS,
-                        value=default_model,  # Use default from crew.py
-                        interactive=True
-                    )
-                    
-                    # Temperature slider
-                    temperature_slider = gr.Slider(
-                        label="Temperature",
-                        minimum=0.0,
-                        maximum=2.0,
-                        value=default_temperature,  # Use default from crew.py
-                        step=0.1,
-                        interactive=True
-                    )
-                    
-                    # Add Run Report button
-                    run_report_btn = gr.Button(
-                        "Run Report",
-                        interactive=False,  # Disabled by default
-                        variant="primary"
                     )
                     
                     # Progress display
@@ -374,30 +338,26 @@ class DueDiligenceUI:
                     )
             
             # Event handlers
-            def update_report_types_and_button(company_name):
-                """Update button state when company changes - keep dropdown hidden"""
+            def update_report_types(company_name):
+                """Update report types when company changes"""
                 if not company_name:
-                    return (
-                        gr.update(choices=[], value=None, visible=False),  # report_type_dropdown
-                        gr.update(interactive=False)                       # run_report_btn
-                    )
+                    return gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
                 
-                # Keep dropdown hidden until user runs analysis
-                return (
-                    gr.update(choices=[], value=None, visible=False),  # report_type_dropdown - always hidden initially
-                    gr.update(interactive=True)                        # run_report_btn - enable if company selected
-                )
+                # Show available reports for the selected company
+                report_types = self.get_report_types_for_company(company_name)
+                return gr.update(choices=report_types, value=None, visible=True)  # report_type_dropdown
             
             def update_report_content(company_name, report_type):
                 """Update report content when company or report type changes"""
                 return self.load_report_content(company_name, report_type)
             
-            def run_analysis_handler(company_name, model, temperature):
+            def run_analysis_handler(data_sources_url):
                 """Handle the run analysis button click"""
-                if not company_name:
+                if not data_sources_url:
                     return (
-                        gr.update(),  # run_report_btn
-                        gr.update(value="Please select a company first", visible=True),  # progress_display
+                        gr.update(),  # run_analysis_btn
+                        gr.update(value="Please provide a data sources URL", visible=True),  # progress_display
+                        gr.update(),  # company_dropdown
                         gr.update(choices=[], value=None),  # report_type_dropdown
                         gr.update()   # report_display
                     )
@@ -407,15 +367,16 @@ class DueDiligenceUI:
                 
                 # Update UI to show progress
                 yield (
-                    gr.update(interactive=False, value="Running..."),  # run_report_btn
+                    gr.update(interactive=False, value="Running..."),  # run_analysis_btn
                     gr.update(value="Starting analysis...", visible=True),  # progress_display
+                    gr.update(),  # company_dropdown
                     gr.update(visible=False),  # report_type_dropdown - hide during analysis
                     gr.update()   # report_display
                 )
                 
                 # Run the analysis in a separate thread
                 def run_in_background():
-                    return self.run_analysis(company_name, model, temperature, progress_callback)
+                    return self.run_analysis(data_sources_url, progress_callback)
                 
                 import concurrent.futures
                 import time
@@ -430,8 +391,9 @@ class DueDiligenceUI:
                         elapsed = int(time.time() - start_time)
                         mins, secs = divmod(elapsed, 60)
                         yield (
-                            gr.update(),  # run_report_btn
+                            gr.update(),  # run_analysis_btn
                             gr.update(value=f"Analysis in progress... {mins:02d}:{secs:02d}"),  # progress_display
+                            gr.update(),  # company_dropdown
                             gr.update(visible=False),  # report_type_dropdown - keep hidden during analysis
                             gr.update()   # report_display
                         )
@@ -443,21 +405,22 @@ class DueDiligenceUI:
                 mins, secs = divmod(int(total_time), 60)
                 time_display = f"{mins:02d}:{secs:02d}"
                 
-                # Re-enable button and update report types
-                updated_report_types = self.get_report_types_for_company(company_name)
+                # Refresh company list and re-enable button
+                updated_companies = self.get_available_companies()
                 
                 yield (
-                    gr.update(interactive=True, value="Run Report"),  # run_report_btn
-                    gr.update(value=f"Analysis completed in {time_display}! Reports are now available.", visible=True),  # progress_display
-                    gr.update(choices=updated_report_types, value=None, visible=True),  # report_type_dropdown - show after completion
+                    gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
+                    gr.update(value=f"Analysis completed in {time_display}! Select a company to view reports.", visible=True),  # progress_display
+                    gr.update(choices=updated_companies),  # company_dropdown - refresh with new companies
+                    gr.update(visible=False),  # report_type_dropdown - keep hidden until company selected
                     gr.update()   # report_display
                 )
             
-            # Company selection updates report types and button state
+            # Company selection updates report types
             company_dropdown.change(
-                fn=update_report_types_and_button,
+                fn=update_report_types,
                 inputs=[company_dropdown],
-                outputs=[report_type_dropdown, run_report_btn]
+                outputs=[report_type_dropdown]
             )
             
             # Both company and report type selection update content
@@ -468,11 +431,11 @@ class DueDiligenceUI:
                     outputs=[report_display]
                 )
             
-            # Run report button handler
-            run_report_btn.click(
+            # Run analysis button handler
+            run_analysis_btn.click(
                 fn=run_analysis_handler,
-                inputs=[company_dropdown, model_dropdown, temperature_slider],
-                outputs=[run_report_btn, progress_display, report_type_dropdown, report_display]
+                inputs=[data_sources_input],
+                outputs=[run_analysis_btn, progress_display, company_dropdown, report_type_dropdown, report_display]
             )
             
             # Load initial state (blank)
