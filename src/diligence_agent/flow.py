@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
 from datetime import datetime
@@ -56,6 +56,10 @@ class DiligenceState(BaseModel):
         "Report Conclusion",
         "Final Report"
     ]
+    
+    # section progress tracking
+    section_progress: Dict[str, str] = {}  # section_name -> status ("pending", "in_progress", "completed")
+    progress_callback: Optional[Callable[[str, str], None]] = None  # callback for progress updates
 
     # data sources organizer flow
     data_sources_file: str = ""
@@ -84,13 +88,34 @@ class DiligenceState(BaseModel):
 
 @persist(verbose=True)
 class DiligenceFlow(Flow[DiligenceState]):
+    
+    def _update_section_progress(self, section_name: str, status: str):
+        """Update section progress and call callback if available"""
+        self.state.section_progress[section_name] = status
+        if self.state.progress_callback:
+            self.state.progress_callback(section_name, status)
+    
+    def _initialize_section_progress(self):
+        """Initialize all sections as pending"""
+        for section in self.state.sections_to_run:
+            self.state.section_progress[section] = "pending"
+        if self.state.progress_callback:
+            # Send initial progress to UI
+            for section in self.state.sections_to_run:
+                self.state.progress_callback(section, "pending")
 
     @start()
     async def get_data_sources(self) -> DataSources:
         """Parse Google Doc containing data sources and extract company name"""
+        # Initialize section progress on first method call
+        self._initialize_section_progress()
+        
         if "Get Data Sources" not in self.state.sections_to_run:
             print("⏭️  Skipping data source extraction")
             return self.state.data_sources
+        
+        # Mark section as in progress
+        self._update_section_progress("Get Data Sources", "in_progress")
         
         # Retrieve raw content from Google Doc
         google_doc_processor = GoogleDocProcessor()
@@ -122,6 +147,9 @@ class DiligenceFlow(Flow[DiligenceState]):
         # Extract and store data sources in state (only the DataSources part)
         self.state.data_sources = company_data_sources.data_sources
         
+        # Mark section as completed
+        self._update_section_progress("Get Data Sources", "completed")
+        
         # Return only the DataSources for the flow
         return self.state.data_sources
 
@@ -132,6 +160,9 @@ class DiligenceFlow(Flow[DiligenceState]):
         if "Parse Data Sources" not in self.state.sections_to_run:
             print("⏭️  Skipping data source parsing")
             return self.state.parsed_data_sources
+        
+        # Mark section as in progress
+        self._update_section_progress("Parse Data Sources", "in_progress")
         
         print("Data sources to parse:", data_sources)
         
@@ -182,6 +213,10 @@ class DiligenceFlow(Flow[DiligenceState]):
         # Update state and write parsed data sources to files
         self.state.parsed_data_sources = parsed_sources
         write_parsed_data_sources(parsed_sources, self.state.company_name, self.state.current_date)
+        
+        # Mark section as completed
+        self._update_section_progress("Parse Data Sources", "completed")
+        
         return parsed_sources
 
 
@@ -208,6 +243,10 @@ class DiligenceFlow(Flow[DiligenceState]):
             "num_websites": self.state.num_websites,
         }
 
+        # Mark sections as in progress
+        for section in sections_to_execute:
+            self._update_section_progress(section, "in_progress")
+        
         # Execute subflows and map results using centralized function
         await execute_subflows_and_map_results(
             ResearchFlow,
@@ -217,8 +256,13 @@ class DiligenceFlow(Flow[DiligenceState]):
             self.state.company_name,
             self.state.current_date,
             self.state.batch_size,
-            self.state.batch_delay
+            self.state.batch_delay,
+            progress_callback=self._update_section_progress
         )
+        
+        # Mark all executed sections as completed
+        for section in sections_to_execute:
+            self._update_section_progress(section, "completed")
 
         print(f"✅ Research flows completed")
         return self.state.report_structure
@@ -241,6 +285,10 @@ class DiligenceFlow(Flow[DiligenceState]):
             "report_structure": self.state.report_structure,
         }
 
+        # Mark sections as in progress
+        for section in sections_to_execute:
+            self._update_section_progress(section, "in_progress")
+        
         # Execute subflows and map results using centralized function
         await execute_subflows_and_map_results(
             NonResearchFlow,
@@ -250,8 +298,13 @@ class DiligenceFlow(Flow[DiligenceState]):
             self.state.company_name,
             self.state.current_date,
             self.state.batch_size,
-            self.state.batch_delay
+            self.state.batch_delay,
+            progress_callback=self._update_section_progress
         )
+        
+        # Mark all executed sections as completed
+        for section in sections_to_execute:
+            self._update_section_progress(section, "completed")
 
         print(f"✅ Non-research flows completed")
         return self.state.report_structure
@@ -263,6 +316,9 @@ class DiligenceFlow(Flow[DiligenceState]):
         if "Final Report" not in self.state.sections_to_run:
             print("⏭️  Skipping report finalization (Final Report not requested)")
             return self.state.final_report
+        
+        # Mark section as in progress
+        self._update_section_progress("Final Report", "in_progress")
         
         query = (
             f"You are given the following structured report about company {self.state.company_name}:\n\n"
@@ -295,10 +351,14 @@ class DiligenceFlow(Flow[DiligenceState]):
                 print(f"🔗 Google Doc available at: {google_doc_url}")
         
         self.state.final_report = final_report
+        
+        # Mark section as completed
+        self._update_section_progress("Final Report", "completed")
+        
         return self.state.final_report
 
 
-async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini") -> Any:
+async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback: Optional[Callable[[str, str], None]] = None) -> Any:
     """
     Run the diligence flow with optional flow ID and specific sections.
     
@@ -339,6 +399,7 @@ async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str
             "num_search_terms": num_search_terms,
             "num_websites": num_websites,
             "model": model,
+            "progress_callback": progress_callback,
         }
         print(f"📄 Starting new flow with data sources: {data_sources_file}")
         

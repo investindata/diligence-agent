@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import re
-from typing import List, Any, Coroutine, Type, Optional, Dict
+from typing import List, Any, Coroutine, Type, Optional, Dict, Callable
 from pydantic import BaseModel
 
 
@@ -22,7 +22,8 @@ async def execute_subflows_and_map_results(
     company_name: str = "",
     current_date: str = "",
     batch_size: int = 2,
-    batch_delay: float = 0.0
+    batch_delay: float = 0.0,
+    progress_callback: Optional[Callable[[str, str], None]] = None
 ) -> Any:
     """
     Execute multiple subflows in batches and map results to report structure fields.
