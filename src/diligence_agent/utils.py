@@ -881,7 +881,7 @@ def write_final_report_to_google_doc(document_name: str, markdown_content: str, 
 # Company Sources Parsing (Deterministic)
 # =============================================================================
 
-def parse_all_companies_from_sources() -> Dict[str, "DataSources"]:
+def parse_all_companies_from_sources():
     """
     Parse all companies from the master diligence sources document using deterministic regex parsing.
     
@@ -1061,7 +1061,14 @@ def _clean_source_item(item: str, section_type: str) -> str:
         pass
     elif section_type == 'slack_channels':
         # Slack channels should be channel IDs
-        item = re.sub(r'^#', '', item)  # Remove # prefix if present
+        # Extract channel ID from full Slack URL or return as-is if already an ID
+        slack_url_match = re.search(r'https?://[^/]*\.slack\.com/.*?/([A-Z0-9]{9,11})', item)
+        if slack_url_match:
+            # Extract channel ID from URL (format: https://company.slack.com/.../C1234567890/...)
+            item = slack_url_match.group(1)
+        else:
+            # Remove # prefix if present (for channel names or IDs)
+            item = re.sub(r'^#', '', item)
     
     return item.strip()
 
@@ -1081,7 +1088,7 @@ def get_available_companies() -> List[str]:
         return []
 
 
-def get_company_data_sources(company_name: str) -> Optional["DataSources"]:
+def get_company_data_sources(company_name: str):
     """
     Get data sources for a specific company.
     Performs case-insensitive matching.

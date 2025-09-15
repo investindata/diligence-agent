@@ -3,6 +3,7 @@ from typing import Any
 from crewai.flow.flow import Flow, listen, start
 from diligence_agent.utils import extract_structured_output, get_schema_description, get_schema_for_section, get_shared_playwright_tools
 from diligence_agent.agents import search_agent, scraper_agent, writer_agent
+from diligence_agent.schemas import WebsitesList
 import asyncio
 from opik.integrations.crewai import track_crewai
 track_crewai(project_name="diligence-agent")
@@ -20,8 +21,7 @@ class ResearchFlow(Flow[ResearchState]):
 
     @start()
     async def search(self) -> Any:
-        flow_id = getattr(self.state, 'id', 'unknown')
-        print(f"🔍 Researching {self.state.section} (ID: {flow_id})")
+        print(f"🔍 Researching {self.state.section}")
         
         schema_class = get_schema_for_section(self.state.section)
         schema_description = get_schema_description(schema_class)
@@ -41,12 +41,36 @@ class ResearchFlow(Flow[ResearchState]):
             f"Do not include any google docs as part of your results.\n\n"
         )
 
-        websites = await search_agent.kickoff_async(query)
-        return websites
+        result = await search_agent.kickoff_async(query, response_format=WebsitesList)
+        return extract_structured_output(result, WebsitesList)
     
 
     @listen(search)
-    async def scrape(self, websites: Any) -> Any:
+    async def enhance_websites(self, websites: Any) -> Any:
+        print(f"🔍 Enhancing website list for {self.state.section}")
+
+        schema_class = get_schema_for_section(self.state.section)
+        schema_description = get_schema_description(schema_class)
+
+        query = (
+            f"You have access to the following data about company {self.state.company}.\n"
+            f"{self.state.parsed_data_sources}\n\n"
+            f"Extract from this data any websites that can support a research effort on {self.state.section.lower()} and the following topics.\n\n"
+            f"{schema_description}\n\n"
+            f"Return a list of relevant websites and explanations. If no relevant websites are found, return an empty list.\n\n"
+            f"Exclude links to google docs or to slack channels.\n\n"
+        )
+
+        result = await scraper_agent.kickoff_async(query, response_format=WebsitesList)
+        enhanced_websites = extract_structured_output(result, WebsitesList)
+        
+        combined_websites = WebsitesList(websites=websites.websites + enhanced_websites.websites)
+        
+        return combined_websites
+    
+
+    @listen(enhance_websites)
+    async def scrape(self, combined_websites: Any) -> Any:
         print(f"🕷️ Scraping websites for {self.state.section}")
         
         schema_class = get_schema_for_section(self.state.section)
@@ -55,8 +79,8 @@ class ResearchFlow(Flow[ResearchState]):
         query = (
             f"Research {self.state.section.lower()} for company {self.state.company}.\n"
             f"Current date: {self.state.current_date}\n\n"
-            f"You are given a list of relevant wesbites below:\n\n"
-            f"{websites}\n\n"
+            f"You are given a list of relevant websites below:\n\n"
+            f"{combined_websites}\n\n"
             f"Scrape each website and collect the necessary content to generate an output based on the provided structured output schema, covering:\n\n"
             f"{schema_description}\n\n"
             f"Ignore any websites that are invalid.\n\n"

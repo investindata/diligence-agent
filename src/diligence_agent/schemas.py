@@ -166,4 +166,11 @@ class AllCompaniesData(BaseModel):
     """Schema for all companies data from the master sources document"""
     companies: Dict[str, DataSources] = Field({}, description="Dictionary mapping company names to their data sources")
 
+class Website(BaseModel):
+    url: str = Field("", description="Website URL")
+    explanation: str = Field("", description="Explanation for why the website is relevant")
+
+class WebsitesList(BaseModel):
+    websites: List[Website] = Field([], description="List of website URLs and explanations")
+
 
