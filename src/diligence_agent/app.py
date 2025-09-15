@@ -590,10 +590,10 @@ def launch_ui():
     demo = ui.create_interface()
     demo.launch(
         server_name="0.0.0.0",
-        server_port=7862,  # Changed port to avoid conflicts
+        server_port=7860,  # Standard port for Hugging Face Spaces
         share=False,
-        debug=True,
-        inbrowser=True
+        debug=False,  # Disable debug in production
+        inbrowser=False  # Don't try to open browser in server environment
     )
 
 
