@@ -4,5 +4,5 @@ emoji: 🚀
 colorFrom: gray
 colorTo: blue
 sdk: gradio
-app_file: app.py
+app_file: src/diligence_agent/app.py
 ---
