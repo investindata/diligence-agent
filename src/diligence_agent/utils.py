@@ -875,4 +875,261 @@ def write_final_report_to_google_doc(document_name: str, markdown_content: str, 
     except Exception as e:
         print(f"⚠️ Warning: Could not create Google Doc: {str(e)}")
         print("   Local file output has been preserved")
+
+
+# =============================================================================
+# Company Sources Parsing (Deterministic)
+# =============================================================================
+
+def parse_all_companies_from_sources() -> Dict[str, "DataSources"]:
+    """
+    Parse all companies from the master diligence sources document using deterministic regex parsing.
+    
+    Returns:
+        Dictionary mapping company names to their DataSources
+        
+    Raises:
+        Exception: If the sources document URL is not configured or parsing fails
+    """
+    from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
+    from diligence_agent.schemas import DataSources
+    
+    # Get the sources document URL from environment
+    sources_doc_url = os.getenv("DILIGENCE_SOURCES_DOC_URL")
+    if not sources_doc_url:
+        raise Exception(
+            "DILIGENCE_SOURCES_DOC_URL environment variable not set. "
+            "Please set it to the URL of your master diligence sources Google Doc."
+        )
+    
+    try:
+        # Get raw content from Google Doc
+        print("📄 Fetching companies data from sources document...")
+        google_doc_processor = GoogleDocProcessor()
+        raw_content = google_doc_processor._run(sources_doc_url).strip()
+        
+        if not raw_content:
+            raise Exception("Sources document appears to be empty")
+        
+        # Parse the document deterministically
+        print("🔍 Parsing company data sources...")
+        companies_dict = _parse_company_sources_content(raw_content)
+        
+        print(f"✅ Successfully parsed {len(companies_dict)} companies from sources document")
+        
+        # Log company names found
+        for company_name in companies_dict.keys():
+            print(f"   • {company_name}")
+        
+        return companies_dict
+        
+    except Exception as e:
+        error_msg = f"Failed to parse companies from sources document: {str(e)}"
+        print(f"❌ {error_msg}")
+        raise Exception(error_msg)
+
+
+def _parse_company_sources_content(content: str) -> Dict[str, "DataSources"]:
+    """
+    Parse the raw content of the sources document using regex patterns.
+    
+    Args:
+        content: Raw text content from the Google Doc
+        
+    Returns:
+        Dictionary mapping company names to DataSources objects
+    """
+    from diligence_agent.schemas import DataSources
+    
+    companies = {}
+    
+    # Split content into lines and clean them
+    lines = [line.strip() for line in content.split('\n')]
+    
+    current_company = None
+    current_section = None
+    current_items = []
+    
+    # Regex patterns
+    company_pattern = re.compile(r'^Company(?:\s+name)?:\s*(.+?)$', re.IGNORECASE)
+    section_patterns = {
+        'google_docs': re.compile(r'^Google\s+docs?:?\s*$', re.IGNORECASE),
+        'websites': re.compile(r'^Websites?:?\s*$', re.IGNORECASE),
+        'pdfs': re.compile(r'^PDFs?:?\s*$', re.IGNORECASE),
+        'slack_channels': re.compile(r'^Slack\s+(?:channels?|channel):?\s*$', re.IGNORECASE)
+    }
+    bullet_pattern = re.compile(r'^[•·\-\*]\s*(.+)$')
+    # Also capture non-bullet content under sections (for items that don't have bullets)
+    content_pattern = re.compile(r'^(.+)$')
+    
+    def finalize_section():
+        """Add current section items to the current company"""
+        if current_company and current_section and current_items:
+            if current_company not in companies:
+                companies[current_company] = DataSources()
+            
+            # Set the items for the current section
+            setattr(companies[current_company], current_section, current_items.copy())
+            current_items.clear()
+    
+    # Process each line
+    for line in lines:
+        if not line:
+            continue
+            
+        # Check for company name
+        company_match = company_pattern.match(line)
+        if company_match:
+            # Finalize previous section before starting new company
+            finalize_section()
+            current_company = company_match.group(1).strip()
+            current_section = None
+            continue
+        
+        # Check for section headers
+        section_found = False
+        for section_name, pattern in section_patterns.items():
+            if pattern.match(line):
+                # Finalize previous section before starting new one
+                finalize_section()
+                current_section = section_name
+                section_found = True
+                break
+        
+        if section_found:
+            continue
+        
+        # Check for bullet point items first
+        bullet_match = bullet_pattern.match(line)
+        if bullet_match and current_section:
+            item = bullet_match.group(1).strip()
+            if item:
+                # Clean up the item (remove extra formatting, brackets, etc.)
+                item = _clean_source_item(item, current_section)
+                if item:
+                    current_items.append(item)
+        elif current_section and line.strip():
+            # If we're in a section and this line doesn't start another company or section,
+            # treat it as content for the current section (for lines without bullets)
+            item = line.strip()
+            if item:
+                # Clean up the item
+                item = _clean_source_item(item, current_section)
+                if item:
+                    current_items.append(item)
+    
+    # Finalize the last section
+    finalize_section()
+    
+    return companies
+
+
+def _clean_source_item(item: str, section_type: str) -> str:
+    """
+    Clean up a source item based on its type.
+    
+    Args:
+        item: Raw item text
+        section_type: Type of section (google_docs, websites, pdfs, slack_channels)
+        
+    Returns:
+        Cleaned item text
+    """
+    # Extract URL from square brackets at the end (e.g., "Title [https://url]")
+    url_match = re.search(r'\[https?://[^\]]+\]$', item)
+    if url_match:
+        # Extract the URL without brackets
+        return url_match.group(0)[1:-1]  # Remove [ and ]
+    
+    # Remove common prefixes and formatting
+    item = re.sub(r'^\[.*?\]\s*', '', item)  # Remove [TensorStax] style prefixes
+    item = re.sub(r'^https?://', 'https://', item)  # Normalize URLs
+    
+    if section_type == 'google_docs':
+        # For Google Docs, if it looks like a title, we might need to reconstruct the URL
+        # For now, just clean the title
+        if not item.startswith('http'):
+            # This is a doc title, keep it as is for now
+            # In a real implementation, you might want to maintain a mapping of titles to URLs
+            pass
+    elif section_type == 'websites':
+        # Ensure websites have proper URL format
+        if not item.startswith('http') and '.' in item:
+            item = f'https://{item}'
+    elif section_type == 'pdfs':
+        # PDFs might be filenames or URLs
+        pass
+    elif section_type == 'slack_channels':
+        # Slack channels should be channel IDs
+        item = re.sub(r'^#', '', item)  # Remove # prefix if present
+    
+    return item.strip()
+
+
+def get_available_companies() -> List[str]:
+    """
+    Get list of available company names from the sources document.
+    
+    Returns:
+        List of company names, or empty list if parsing fails
+    """
+    try:
+        companies_dict = parse_all_companies_from_sources()
+        return list(companies_dict.keys())
+    except Exception as e:
+        print(f"⚠️ Warning: Could not get available companies: {e}")
+        return []
+
+
+def get_company_data_sources(company_name: str) -> Optional["DataSources"]:
+    """
+    Get data sources for a specific company.
+    Performs case-insensitive matching.
+    
+    Args:
+        company_name: Name of the company to get data sources for
+        
+    Returns:
+        DataSources object for the company, or None if not found
+    """
+    try:
+        companies_dict = parse_all_companies_from_sources()
+        
+        # Case-insensitive search
+        company_name_lower = company_name.lower().strip()
+        for available_name, data_sources in companies_dict.items():
+            if available_name.lower().strip() == company_name_lower:
+                return data_sources
+        
         return None
+    except Exception as e:
+        print(f"⚠️ Warning: Could not get data sources for {company_name}: {e}")
+        return None
+
+
+def validate_company_name(company_name: str) -> tuple[bool, Optional[str], List[str]]:
+    """
+    Validate if a company name exists in the sources document.
+    
+    Args:
+        company_name: Name to validate
+        
+    Returns:
+        Tuple of (is_valid, matched_name, available_companies)
+    """
+    try:
+        available_companies = get_available_companies()
+        
+        if not available_companies:
+            return False, None, []
+        
+        # Case-insensitive search
+        company_name_lower = company_name.lower().strip()
+        for available_name in available_companies:
+            if available_name.lower().strip() == company_name_lower:
+                return True, available_name, available_companies
+        
+        return False, None, available_companies
+    except Exception as e:
+        print(f"⚠️ Warning: Could not validate company name: {e}")
+        return False, None, []

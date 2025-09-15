@@ -1,4 +1,4 @@
-from typing import List, Optional, Annotated
+from typing import List, Optional, Annotated, Dict
 from pydantic import BaseModel, HttpUrl, Field
 
 
@@ -161,5 +161,9 @@ class DataSources(BaseModel):
 class CompanyDataSources(BaseModel):
     company_name: str = Field(..., description="Name of the company extracted from the document")
     data_sources: DataSources = Field(..., description="Data sources for the company")
+
+class AllCompaniesData(BaseModel):
+    """Schema for all companies data from the master sources document"""
+    companies: Dict[str, DataSources] = Field({}, description="Dictionary mapping company names to their data sources")
 
 

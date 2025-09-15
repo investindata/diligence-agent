@@ -10,6 +10,11 @@ import json
 import asyncio
 from datetime import datetime
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv(override=True)
+
 from diligence_agent.flow import kickoff
 from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
 from diligence_agent.schemas import CompanyDataSources
@@ -21,31 +26,21 @@ class DueDiligenceUI:
     """Gradio UI for running analysis and viewing investment reports"""
     
     def __init__(self):
-        self.company_metadata_dir = Path("company_metadata")
-        self.company_metadata_dir.mkdir(exist_ok=True)
-        self.companies_index_file = self.company_metadata_dir / "companies_index.json"
         self.section_progress = {}  # Track section progress for UI updates
         
     def get_available_companies(self) -> List[str]:
-        """Get all stored companies from company_metadata directory"""
+        """Get list of available companies from the master sources document"""
+        from diligence_agent.utils import get_available_companies
         try:
-            if not self.companies_index_file.exists():
-                return ["New Company"]
-            
-            with open(self.companies_index_file, 'r') as f:
-                companies_data = json.load(f)
-            
-            companies = list(companies_data.keys())
-            companies.append("New Company")
-            return companies
+            return get_available_companies()
         except Exception as e:
             print(f"Error getting companies: {e}")
-            return ["New Company"]
+            return []
     
-    def run_analysis(self, data_sources_url: str, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback=None) -> str:
-        """Run the diligence analysis using the flow system with data sources URL"""
-        if not data_sources_url:
-            return "No data sources URL provided"
+    def run_analysis(self, company_name: str, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback=None) -> str:
+        """Run the diligence analysis using the flow system with company name"""
+        if not company_name:
+            return "No company name provided"
         
         try:
             if progress_callback:
@@ -61,7 +56,7 @@ class DueDiligenceUI:
             # Run the analysis using the flow system directly
             async def run_flow():
                 return await kickoff(
-                    data_sources_file=data_sources_url,
+                    company_name=company_name,
                     num_search_terms=num_search_terms,
                     num_websites=num_websites,
                     model=model,
@@ -92,101 +87,8 @@ class DueDiligenceUI:
                 progress_callback(error_msg)
             return error_msg
     
-    def save_company_metadata(self, company_name: str, data_sources_url: str) -> bool:
-        """Save company metadata to files"""
-        try:
-            # Load or create companies index
-            if self.companies_index_file.exists():
-                with open(self.companies_index_file, 'r') as f:
-                    companies_index = json.load(f)
-            else:
-                companies_index = {}
-            
-            # Create individual company file
-            company_file = self.company_metadata_dir / f"{company_name.lower().replace(' ', '_')}.json"
-            
-            now = datetime.now().isoformat()
-            company_data = {
-                "name": company_name,
-                "data_sources_url": data_sources_url,
-                "created_at": now,
-                "last_used": now,
-                "analysis_count": 1
-            }
-            
-            # Update existing company or create new
-            if company_name in companies_index:
-                # Load existing data and update
-                with open(company_file, 'r') as f:
-                    existing_data = json.load(f)
-                company_data["created_at"] = existing_data["created_at"]
-                company_data["analysis_count"] = existing_data.get("analysis_count", 0) + 1
-            
-            # Save individual company file
-            with open(company_file, 'w') as f:
-                json.dump(company_data, f, indent=2)
-            
-            # Update companies index
-            companies_index[company_name] = {
-                "file": str(company_file),
-                "last_used": now
-            }
-            
-            # Save companies index
-            with open(self.companies_index_file, 'w') as f:
-                json.dump(companies_index, f, indent=2)
-            
-            return True
-        except Exception as e:
-            print(f"Error saving company metadata: {e}")
-            return False
     
-    def get_company_data_sources_url(self, company_name: str) -> Optional[str]:
-        """Get data sources URL for a company"""
-        try:
-            if company_name == "New Company":
-                return None
-                
-            company_file = self.company_metadata_dir / f"{company_name.lower().replace(' ', '_')}.json"
-            if not company_file.exists():
-                return None
-                
-            with open(company_file, 'r') as f:
-                company_data = json.load(f)
-                
-            return company_data.get("data_sources_url")
-        except Exception as e:
-            print(f"Error getting company data sources URL: {e}")
-            return None
     
-    async def extract_company_name_from_url(self, data_sources_url: str) -> Optional[str]:
-        """Extract company name from data sources URL using LLM"""
-        try:
-            # Get raw content from Google Doc
-            google_doc_processor = GoogleDocProcessor()
-            raw_data_sources = google_doc_processor._run(data_sources_url).strip()
-            
-            # Use LLM to extract company name
-            query = (
-                f"Parse the following Google Doc content and extract both the company name and data sources.\n\n"
-                f"Raw content:\n{raw_data_sources}\n\n"
-                f"Extract:\n"
-                f"1. The company name (look for patterns like 'Company name: X' or similar)\n"
-                f"2. All data sources organized into the required structure\n\n"
-                f"Return both the company name and structured data sources."
-            )
-            
-            result = await organizer_agent.kickoff_async(query, response_format=CompanyDataSources)
-            company_data_sources = extract_structured_output(result, CompanyDataSources)
-            
-            if company_data_sources.company_name:
-                return company_data_sources.company_name.strip()
-            else:
-                return None
-                
-        except Exception as e:
-            print(f"Error extracting company name: {e}")
-            return None
     
     def get_available_reports(self, company_name: str) -> List[Dict[str, str]]:
         """Get all available reports for a company from task_outputs directory"""
@@ -429,40 +331,6 @@ class DueDiligenceUI:
                         interactive=True
                     )
                     
-                    # Data Sources URL input (hidden by default)
-                    data_sources_input = gr.Textbox(
-                        label="Data Sources URL",
-                        placeholder="Paste Google Doc URL containing company data sources...",
-                        lines=2,
-                        interactive=True,
-                        visible=False
-                    )
-                    
-                    # Process URL button (hidden by default)
-                    process_url_btn = gr.Button(
-                        "Process URL",
-                        interactive=True,
-                        variant="secondary",
-                        visible=False
-                    )
-                    
-                    # Status message for URL processing
-                    url_status = gr.Textbox(
-                        label="Status",
-                        value="",
-                        interactive=False,
-                        visible=False
-                    )
-                    
-                    gr.Markdown("### Research Parameters")
-
-                    model_dropdown = gr.Dropdown(
-                        label="Model",
-                        choices=["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
-                        value="gpt-4.1-mini",
-                        interactive=True
-                    )
-                    
                     search_terms_slider = gr.Slider(
                         label="Search Terms",
                         minimum=1,
@@ -488,18 +356,6 @@ class DueDiligenceUI:
                         variant="primary"
                     )
                     
-                    gr.Markdown("### View Reports")
-                    
-                    # Report selection will use the same company dropdown from above
-                    
-                    # Progress display
-                    # Section progress display
-                    section_progress_display = gr.Markdown(
-                        value="",
-                        visible=False,
-                        label="Analysis Progress"
-                    )
-                    
                     # Progress status message
                     progress_display = gr.Textbox(
                         label="Status",
@@ -507,7 +363,17 @@ class DueDiligenceUI:
                         interactive=False,
                         visible=False
                     )
+
+                    # Section progress display
+                    section_progress_display = gr.Markdown(
+                        value="",
+                        visible=False,
+                        label="Analysis Progress"
+                    )
                     
+                    # View Reports section - only shown after analysis is complete
+                    view_reports_header = gr.Markdown("### View Reports", visible=False)
+
                     # Report type dropdown - only shown after reports are created
                     report_type_dropdown = gr.Dropdown(
                         label="Select Report",
@@ -529,95 +395,25 @@ class DueDiligenceUI:
             
             # Event handlers
             def handle_company_selection(company_name):
-                """Handle company selection - show/hide data sources input"""
+                """Handle company selection"""
                 if not company_name:
                     return (
-                        gr.update(visible=False),  # data_sources_input
-                        gr.update(visible=False),  # process_url_btn
-                        gr.update(visible=False),  # url_status
                         gr.update(interactive=False),  # run_analysis_btn
+                        gr.update(visible=False),  # view_reports_header
                         gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
                     )
                 
-                if company_name == "New Company":
-                    return (
-                        gr.update(visible=True, value=""),  # data_sources_input
-                        gr.update(visible=True),  # process_url_btn  
-                        gr.update(visible=False),  # url_status
-                        gr.update(interactive=False),  # run_analysis_btn
-                        gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
-                    )
-                else:
-                    # Existing company - show reports and enable analysis
-                    report_types = self.get_report_types_for_company(company_name)
-                    return (
-                        gr.update(visible=False),  # data_sources_input
-                        gr.update(visible=False),  # process_url_btn
-                        gr.update(visible=False),  # url_status
-                        gr.update(interactive=True),  # run_analysis_btn
-                        gr.update(choices=report_types, value=None, visible=True)  # report_type_dropdown
-                    )
-            
-            async def process_new_company_url(data_sources_url):
-                """Process URL for new company and extract company name"""
-                if not data_sources_url:
-                    yield (
-                        gr.update(),  # company_dropdown
-                        gr.update(value="Please enter a data sources URL", visible=True),  # url_status
-                        gr.update(interactive=False),  # run_analysis_btn
-                        gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
-                    )
-                    return
-                
-                # Show processing status
-                yield (
-                    gr.update(),  # company_dropdown
-                    gr.update(value="Extracting company name...", visible=True),  # url_status
-                    gr.update(interactive=False),  # run_analysis_btn
-                    gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
+                # Company selected - enable analysis but don't show reports until analysis is done
+                return (
+                    gr.update(interactive=True),  # run_analysis_btn
+                    gr.update(visible=False),  # view_reports_header - keep hidden until analysis
+                    gr.update(choices=[], value=None, visible=False)  # report_type_dropdown - keep hidden until analysis
                 )
-                
-                try:
-                    # Extract company name using LLM
-                    company_name = await self.extract_company_name_from_url(data_sources_url)
-                    
-                    if company_name:
-                        # Save company metadata
-                        if self.save_company_metadata(company_name, data_sources_url):
-                            # Update dropdown choices and select the new company
-                            updated_companies = self.get_available_companies()
-                            yield (
-                                gr.update(choices=updated_companies, value=company_name),  # company_dropdown
-                                gr.update(value=f"Company '{company_name}' added successfully!", visible=True),  # url_status
-                                gr.update(interactive=True),  # run_analysis_btn
-                                gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
-                            )
-                        else:
-                            yield (
-                                gr.update(),  # company_dropdown
-                                gr.update(value="Error saving company data", visible=True),  # url_status
-                                gr.update(interactive=False),  # run_analysis_btn
-                                gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
-                            )
-                    else:
-                        yield (
-                            gr.update(),  # company_dropdown
-                            gr.update(value="Could not extract company name from URL", visible=True),  # url_status
-                            gr.update(interactive=False),  # run_analysis_btn
-                            gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
-                        )
-                        
-                except Exception as e:
-                    yield (
-                        gr.update(),  # company_dropdown
-                        gr.update(value=f"Error processing URL: {str(e)}", visible=True),  # url_status
-                        gr.update(interactive=False),  # run_analysis_btn
-                        gr.update(choices=[], value=None, visible=False)  # report_type_dropdown
-                    )
+            
             
             def update_report_types(company_name):
                 """Update report types dropdown when company is selected"""
-                if company_name and company_name != "New Company":
+                if company_name:
                     report_types = self.get_report_types_for_company(company_name)
                     return gr.update(choices=report_types, value=None, visible=True)
                 else:
@@ -627,27 +423,16 @@ class DueDiligenceUI:
                 """Update report content when company or report type changes"""
                 return self.load_report_content(company_name, report_type)
             
-            def run_analysis_handler(company_name, search_terms, websites, model):
+            def run_analysis_handler(company_name, search_terms, websites):
                 """Handle the run analysis button click"""
-                if not company_name or company_name == "New Company":
+                if not company_name:
                     return (
                         gr.update(),  # run_analysis_btn
                         gr.update(value="", visible=False),  # section_progress_display
                         gr.update(value="Please select a company to run analysis", visible=True),  # progress_display
                         gr.update(),  # company_dropdown
-                        gr.update(choices=[], value=None),  # report_type_dropdown
-                        gr.update()   # report_display
-                    )
-                
-                # Get the data sources URL for the selected company
-                data_sources_url = self.get_company_data_sources_url(company_name)
-                if not data_sources_url:
-                    return (
-                        gr.update(),  # run_analysis_btn
-                        gr.update(value="", visible=False),  # section_progress_display
-                        gr.update(value="No data sources URL found for selected company", visible=True),  # progress_display
-                        gr.update(),  # company_dropdown
-                        gr.update(choices=[], value=None),  # report_type_dropdown
+                        gr.update(visible=False),  # view_reports_header
+                        gr.update(choices=[], value=None, visible=False),  # report_type_dropdown
                         gr.update()   # report_display
                     )
                 
@@ -663,13 +448,14 @@ class DueDiligenceUI:
                     gr.update(value="", visible=True),  # section_progress_display
                     gr.update(value="Starting analysis...", visible=True),  # progress_display
                     gr.update(),  # company_dropdown
+                    gr.update(visible=False),  # view_reports_header - keep hidden during analysis
                     gr.update(visible=False),  # report_type_dropdown - hide during analysis
                     gr.update()   # report_display
                 )
                 
                 # Run the analysis in a separate thread
                 def run_in_background():
-                    return self.run_analysis(data_sources_url, search_terms, websites, model, progress_callback)
+                    return self.run_analysis(company_name, search_terms, websites, progress_callback=progress_callback)
                 
                 import concurrent.futures
                 import time
@@ -692,6 +478,7 @@ class DueDiligenceUI:
                             gr.update(value=section_progress_md, visible=True if section_progress_md else False),  # section_progress_display
                             gr.update(value=f"Analysis in progress... {mins:02d}:{secs:02d}"),  # progress_display
                             gr.update(),  # company_dropdown
+                            gr.update(visible=False),  # view_reports_header - keep hidden during analysis
                             gr.update(visible=False),  # report_type_dropdown - keep hidden during analysis
                             gr.update()   # report_display
                         )
@@ -709,27 +496,24 @@ class DueDiligenceUI:
                 # Get final section progress
                 final_section_progress = self.format_section_progress()
                 
+                # After analysis is complete, show the "View Reports" section and populate reports for this company
+                report_types = self.get_report_types_for_company(company_name)
+                
                 yield (
                     gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
                     gr.update(value=final_section_progress, visible=True if final_section_progress else False),  # section_progress_display
-                    gr.update(value=f"Analysis completed in {time_display}! Select a company to view reports.", visible=True),  # progress_display
+                    gr.update(value=f"Analysis completed in {time_display}! Select a report to view.", visible=True),  # progress_display
                     gr.update(choices=updated_companies),  # company_dropdown - refresh with new companies
-                    gr.update(visible=False),  # report_type_dropdown - keep hidden until company selected
+                    gr.update(visible=True),  # view_reports_header - show after analysis is complete
+                    gr.update(choices=report_types, value=None, visible=True),  # report_type_dropdown - show with available reports
                     gr.update()   # report_display
                 )
             
-            # Process URL button handler
-            process_url_btn.click(
-                fn=process_new_company_url,
-                inputs=[data_sources_input],
-                outputs=[company_dropdown, url_status, run_analysis_btn, report_type_dropdown]
-            )
-            
-            # Company selection updates data sources input visibility
+            # Company selection updates report types and analysis button
             company_dropdown.change(
                 fn=handle_company_selection,
                 inputs=[company_dropdown],
-                outputs=[data_sources_input, process_url_btn, url_status, run_analysis_btn, report_type_dropdown]
+                outputs=[run_analysis_btn, view_reports_header, report_type_dropdown]
             )
             
             # Company selection also updates report types
@@ -750,8 +534,8 @@ class DueDiligenceUI:
             # Run analysis button handler
             run_analysis_btn.click(
                 fn=run_analysis_handler,
-                inputs=[company_dropdown, search_terms_slider, websites_slider, model_dropdown],
-                outputs=[run_analysis_btn, section_progress_display, progress_display, company_dropdown, report_type_dropdown, report_display]
+                inputs=[company_dropdown, search_terms_slider, websites_slider],
+                outputs=[run_analysis_btn, section_progress_display, progress_display, company_dropdown, view_reports_header, report_type_dropdown, report_display]
             )
             
             # Load initial state (blank)
@@ -770,7 +554,7 @@ def launch_ui():
     demo = ui.create_interface()
     demo.launch(
         server_name="0.0.0.0",
-        server_port=7861,  # Different port to avoid conflicts
+        server_port=7862,  # Changed port to avoid conflicts
         share=False,
         debug=True,
         inbrowser=True

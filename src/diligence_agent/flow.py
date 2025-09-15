@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List, Callable
 from crewai.flow.flow import Flow, listen, start
 from crewai.flow.persistence import persist
@@ -16,7 +16,10 @@ from diligence_agent.utils import (
     write_section_file,
     clean_markdown_output,
     write_parsed_data_sources,
-    write_final_report_to_google_doc
+    write_final_report_to_google_doc,
+    get_company_data_sources,
+    get_available_companies,
+    validate_company_name
 )
 import os
 
@@ -59,10 +62,9 @@ class DiligenceState(BaseModel):
     
     # section progress tracking
     section_progress: Dict[str, str] = {}  # section_name -> status ("pending", "in_progress", "completed")
-    progress_callback: Optional[Callable[[str, str], None]] = None  # callback for progress updates
+    progress_callback: Optional[Callable[[str, str], None]] = Field(default=None, exclude=True)  # callback for progress updates (excluded from serialization)
 
     # data sources organizer flow
-    data_sources_file: str = ""
     data_sources: DataSources = DataSources(
         google_docs=[],
         pdfs=[],
@@ -106,7 +108,7 @@ class DiligenceFlow(Flow[DiligenceState]):
 
     @start()
     async def get_data_sources(self) -> DataSources:
-        """Parse Google Doc containing data sources and extract company name"""
+        """Get data sources for the specified company from the master sources document"""
         # Initialize section progress on first method call
         self._initialize_section_progress()
         
@@ -116,41 +118,33 @@ class DiligenceFlow(Flow[DiligenceState]):
         
         # Mark section as in progress
         self._update_section_progress("Get Data Sources", "in_progress")
+
+        print(f"📄 Getting data sources for company: {self.state.company_name}")
+
+        # Use the new deterministic parsing function
+        data_sources = get_company_data_sources(self.state.company_name)
         
-        # Retrieve raw content from Google Doc
-        google_doc_processor = GoogleDocProcessor()
-        raw_data_sources = google_doc_processor._run(self.state.data_sources_file).strip()
-        print(f"📄 Raw data sources content (length: {len(raw_data_sources)}):")
-        print("=" * 80)
-        print(raw_data_sources)
-        print("=" * 80)
+        if not data_sources:
+            # Try to get available companies for error message
+            available_companies = get_available_companies()
+            if available_companies:
+                available_list = ", ".join(available_companies)
+                raise ValueError(f"Company '{self.state.company_name}' not found in sources document. Available companies: {available_list}")
+            else:
+                raise ValueError(f"Company '{self.state.company_name}' not found and could not load sources document. Please check DILIGENCE_SOURCES_DOC_URL environment variable.")
         
-        query = (
-            f"Parse the following Google Doc content and extract both the company name and data sources.\n\n"
-            f"Raw content:\n{raw_data_sources}\n\n"
-            f"Extract:\n"
-            f"1. The company name (look for patterns like 'Company name: X' or similar)\n"
-            f"2. All data sources organized into the required structure\n\n"
-            f"Return both the company name and structured data sources."
-        )
+        print(f"✅ Found data sources for {self.state.company_name}")
+        print(f"   📄 Google Docs: {len(data_sources.google_docs)}")
+        print(f"   🌐 Websites: {len(data_sources.websites)}")  
+        print(f"   📋 PDFs: {len(data_sources.pdfs)}")
+        print(f"   💬 Slack Channels: {len(data_sources.slack_channels)}")
         
-        result = await organizer_agent.kickoff_async(query, response_format=CompanyDataSources)
-        company_data_sources = extract_structured_output(result, CompanyDataSources)  # type: ignore
-        
-        # Extract and store company name in state
-        if company_data_sources.company_name:
-            self.state.company_name = company_data_sources.company_name.strip()
-            print(f"📋 Extracted company name: {self.state.company_name}")
-        else:
-            raise ValueError("Could not extract company name from the data sources document. Please ensure the document contains 'Company name: [Name]' or similar.")
-        
-        # Extract and store data sources in state (only the DataSources part)
-        self.state.data_sources = company_data_sources.data_sources
+        # Store data sources in state
+        self.state.data_sources = data_sources
         
         # Mark section as completed
         self._update_section_progress("Get Data Sources", "completed")
         
-        # Return only the DataSources for the flow
         return self.state.data_sources
 
 
@@ -341,10 +335,11 @@ class DiligenceFlow(Flow[DiligenceState]):
             
             # Also write to Google Drive
             document_name = f"{self.state.company_name}_Final_Report"
+            sources_doc_url = os.getenv("DILIGENCE_SOURCES_DOC_URL", "")
             google_doc_url = write_final_report_to_google_doc(
                 document_name=document_name,
                 markdown_content=final_report,
-                source_doc_url=self.state.data_sources_file
+                source_doc_url=sources_doc_url
             )
             
             if google_doc_url:
@@ -358,12 +353,12 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.final_report
 
 
-async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback: Optional[Callable[[str, str], None]] = None) -> Any:
+async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback: Optional[Callable[[str, str], None]] = None) -> Any:
     """
     Run the diligence flow with optional flow ID and specific sections.
     
     Args:
-        data_sources_file: Google Doc URL containing company data sources (required for new flows)
+        company_name: Name of the company to analyze (required for new flows)
         flow_id: Optional flow ID to resume existing flow
         sections: Optional list of specific sections to run
         clear_cache: Whether to clear the cache before running
@@ -390,18 +385,32 @@ async def kickoff(data_sources_file: Optional[str] = None, flow_id: Optional[str
             print(f"📋 Sections to run: {sections}")
     else:
         # No flow ID provided, start fresh
-        if not data_sources_file:
-            raise ValueError("data_sources_file is required for new flows. Please provide a Google Doc URL containing company data sources.")
+        if not company_name:
+            raise ValueError("company_name is required for new flows. Please provide a company name.")
+        
+        # Validate company name and get available companies
+        from diligence_agent.utils import validate_company_name
+        is_valid, matched_name, available_companies = validate_company_name(company_name)
+        
+        if not is_valid:
+            if available_companies:
+                available_list = ", ".join(available_companies)
+                raise ValueError(f"Company '{company_name}' not found. Available companies: {available_list}")
+            else:
+                raise ValueError(f"Could not validate company name. Please check DILIGENCE_SOURCES_DOC_URL environment variable.")
+        
+        # Use the matched name (handles case-insensitive matching)
+        company_name = matched_name
         
         inputs = {
-            "data_sources_file": data_sources_file,
+            "company_name": company_name,
             "current_date": datetime.now().strftime("%Y-%m-%d"),
             "num_search_terms": num_search_terms,
             "num_websites": num_websites,
             "model": model,
             "progress_callback": progress_callback,
         }
-        print(f"📄 Starting new flow with data sources: {data_sources_file}")
+        print(f"📄 Starting new flow for company: {company_name}")
         
         # Override sections if specified for new flows
         if sections:
@@ -439,7 +448,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Run Diligence Agent flow-based analysis')
-    parser.add_argument('--sources', type=str, help='Google Doc URL containing company data sources (required for new flows)')
+    parser.add_argument('company_name', nargs='?', type=str, help='Name of the company to analyze (e.g., "TensorStax", "BaseT_en")')
     parser.add_argument('--flow_id', type=str, help='Flow ID to resume existing flow')
     parser.add_argument('--sections', type=str, help='Comma-separated list of sections to run (e.g., "Final Report,Market")')
     parser.add_argument('--clear_cache', action='store_true', help='Clear search/scraping cache before running')
@@ -457,7 +466,7 @@ if __name__ == "__main__":
     # Run the flow with parsed arguments
     try:
         asyncio.run(kickoff(
-            data_sources_file=args.sources,
+            company_name=args.company_name,
             flow_id=args.flow_id, 
             sections=sections,
             clear_cache=args.clear_cache,
