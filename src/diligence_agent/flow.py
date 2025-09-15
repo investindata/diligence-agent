@@ -42,7 +42,7 @@ class DiligenceState(BaseModel):
     current_date: str = ""
     
     # execution parameters
-    batch_size: int = 1
+    batch_size: int = 2
     batch_delay: float = 0.0  # seconds
     num_search_terms: int = 1
     num_websites: int = 1

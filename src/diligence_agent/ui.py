@@ -27,6 +27,7 @@ class DueDiligenceUI:
     
     def __init__(self):
         self.section_progress = {}  # Track section progress for UI updates
+        self.cost_info = {}  # Track cost information from last run
         
     def get_available_companies(self) -> List[str]:
         """Get list of available companies from the master sources document"""
@@ -75,10 +76,25 @@ class DueDiligenceUI:
                 progress_callback("Running flow analysis...")
             
             result = loop.run_until_complete(run_flow())
-            
+
+            # Capture cost information from global cost tracker
+            from diligence_agent.utils import get_global_cost_tracker
+            cost_tracker = get_global_cost_tracker()
+            cost_summary = cost_tracker.get_summary()
+
+            # Store cost info for UI display
+            self.cost_info = {
+                'total_tokens': cost_summary['total_tokens'],
+                'prompt_tokens': cost_summary['prompt_tokens'],
+                'completion_tokens': cost_summary['completion_tokens'],
+                'total_cost': cost_summary['total_cost'],
+                'total_llm_calls': cost_summary['total_llm_calls'],
+                'model': cost_summary['model']
+            }
+
             if progress_callback:
                 progress_callback("Flow analysis completed successfully!")
-            
+
             return f"Analysis completed successfully! Flow ID: {getattr(result, 'id', 'unknown')}"
                 
         except Exception as e:
@@ -288,7 +304,22 @@ class DueDiligenceUI:
                 lines.append(f"{emoji} {section}")
         
         return "\n".join(lines) if lines else ""
-    
+
+    def format_cost_info(self) -> str:
+        """Format cost information as markdown"""
+        if not self.cost_info or self.cost_info.get('total_llm_calls', 0) == 0:
+            return ""
+
+        cost_lines = ["### 💰 Cost Summary"]
+        cost_lines.append(f"**Total LLM Calls:** {self.cost_info['total_llm_calls']}\n")
+        cost_lines.append(f"**Total Tokens:** {self.cost_info['total_tokens']:,}\n")
+        if self.cost_info['total_cost'] > 0:
+            cost_lines.append(f"**Total Cost:** ${self.cost_info['total_cost']:.4f}\n")
+
+        cost_lines.append(f"**Model:** {self.cost_info['model']}")
+
+        return "\n".join(cost_lines)
+
     def create_interface(self):
         """Create the Gradio interface for report viewing"""
         
@@ -382,13 +413,20 @@ class DueDiligenceUI:
                         interactive=True,
                         visible=False  # Hidden by default
                     )
+
+                    # Cost information display - only shown after analysis is complete
+                    cost_display = gr.Markdown(
+                        value="",
+                        visible=False,
+                        label="Cost Information"
+                    )
                 
                 with gr.Column(scale=3):
                     gr.Markdown("### Report")
-                    
+
                     report_display = gr.Markdown(
                         value="",  # Start blank
-                        height=600,
+                        height=800,  # Increased from 600 to 800 (33% increase)
                         show_copy_button=True,
                         container=True
                     )
@@ -433,6 +471,7 @@ class DueDiligenceUI:
                         gr.update(),  # company_dropdown
                         gr.update(visible=False),  # view_reports_header
                         gr.update(choices=[], value=None, visible=False),  # report_type_dropdown
+                        gr.update(value="", visible=False),  # cost_display
                         gr.update()   # report_display
                     )
                 
@@ -450,6 +489,7 @@ class DueDiligenceUI:
                     gr.update(),  # company_dropdown
                     gr.update(visible=False),  # view_reports_header - keep hidden during analysis
                     gr.update(visible=False),  # report_type_dropdown - hide during analysis
+                    gr.update(value="", visible=False),  # cost_display - hide during analysis
                     gr.update()   # report_display
                 )
                 
@@ -480,6 +520,7 @@ class DueDiligenceUI:
                             gr.update(),  # company_dropdown
                             gr.update(visible=False),  # view_reports_header - keep hidden during analysis
                             gr.update(visible=False),  # report_type_dropdown - keep hidden during analysis
+                            gr.update(value="", visible=False),  # cost_display - keep hidden during analysis
                             gr.update()   # report_display
                         )
                     
@@ -498,7 +539,10 @@ class DueDiligenceUI:
                 
                 # After analysis is complete, show the "View Reports" section and populate reports for this company
                 report_types = self.get_report_types_for_company(company_name)
-                
+
+                # Format cost information
+                cost_info_md = self.format_cost_info()
+
                 yield (
                     gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
                     gr.update(value=final_section_progress, visible=True if final_section_progress else False),  # section_progress_display
@@ -506,6 +550,7 @@ class DueDiligenceUI:
                     gr.update(choices=updated_companies),  # company_dropdown - refresh with new companies
                     gr.update(visible=True),  # view_reports_header - show after analysis is complete
                     gr.update(choices=report_types, value=None, visible=True),  # report_type_dropdown - show with available reports
+                    gr.update(value=cost_info_md, visible=True if cost_info_md else False),  # cost_display - show cost info after analysis
                     gr.update()   # report_display
                 )
             
@@ -535,7 +580,7 @@ class DueDiligenceUI:
             run_analysis_btn.click(
                 fn=run_analysis_handler,
                 inputs=[company_dropdown, search_terms_slider, websites_slider],
-                outputs=[run_analysis_btn, section_progress_display, progress_display, company_dropdown, view_reports_header, report_type_dropdown, report_display]
+                outputs=[run_analysis_btn, section_progress_display, progress_display, company_dropdown, view_reports_header, report_type_dropdown, cost_display, report_display]
             )
             
             # Load initial state (blank)
