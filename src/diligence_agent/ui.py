@@ -301,8 +301,8 @@ class DueDiligenceUI:
             if section in self.section_progress:
                 status = self.section_progress[section]
                 emoji = status_emoji.get(status, "❓")
-                lines.append(f"{emoji} {section}")
-        
+                lines.append(f"{emoji} {section}\n")
+
         return "\n".join(lines) if lines else ""
 
     def format_cost_info(self) -> str:
@@ -401,7 +401,14 @@ class DueDiligenceUI:
                         visible=False,
                         label="Analysis Progress"
                     )
-                    
+
+                    # Cost information display - only shown after analysis is complete
+                    cost_display = gr.Markdown(
+                        value="",
+                        visible=False,
+                        label="Cost Information"
+                    )
+
                     # View Reports section - only shown after analysis is complete
                     view_reports_header = gr.Markdown("### View Reports", visible=False)
 
@@ -412,13 +419,6 @@ class DueDiligenceUI:
                         value=None,  # Start with no selection
                         interactive=True,
                         visible=False  # Hidden by default
-                    )
-
-                    # Cost information display - only shown after analysis is complete
-                    cost_display = gr.Markdown(
-                        value="",
-                        visible=False,
-                        label="Cost Information"
                     )
                 
                 with gr.Column(scale=3):
@@ -545,7 +545,7 @@ class DueDiligenceUI:
 
                 yield (
                     gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
-                    gr.update(value=final_section_progress, visible=True if final_section_progress else False),  # section_progress_display
+                    gr.update(value="", visible=False),  # section_progress_display - hide after completion
                     gr.update(value=f"Analysis completed in {time_display}! Select a report to view.", visible=True),  # progress_display
                     gr.update(choices=updated_companies),  # company_dropdown - refresh with new companies
                     gr.update(visible=True),  # view_reports_header - show after analysis is complete
@@ -561,12 +561,12 @@ class DueDiligenceUI:
                 outputs=[run_analysis_btn, view_reports_header, report_type_dropdown]
             )
             
-            # Company selection also updates report types
-            company_dropdown.change(
-                fn=update_report_types,
-                inputs=[company_dropdown],
-                outputs=[report_type_dropdown]
-            )
+            # Don't update report types on company selection - only after analysis
+            # company_dropdown.change(
+            #     fn=update_report_types,
+            #     inputs=[company_dropdown],
+            #     outputs=[report_type_dropdown]
+            # )
             
             # Both company and report type selection update content
             for component in [company_dropdown, report_type_dropdown]:
