@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 from typing import Any
 from crewai.flow.flow import Flow, listen, start
-from diligence_agent.utils import extract_structured_output, get_schema_description, get_schema_for_section, get_shared_playwright_tools
-from diligence_agent.agents import search_agent, scraper_agent, writer_agent
+from diligence_agent.utils import extract_structured_output, get_schema_description, get_schema_for_section, get_shared_playwright_tools, get_global_cost_tracker
+from diligence_agent.agents import search_agent, scraper_agent, writer_agent, model
 from diligence_agent.schemas import WebsitesList
 import asyncio
 from opik.integrations.crewai import track_crewai
@@ -18,6 +18,9 @@ class ResearchState(BaseModel):
     num_websites: int = 10
 
 class ResearchFlow(Flow[ResearchState]):
+
+    def __init__(self):
+        super().__init__()
 
     @start()
     async def search(self) -> Any:
@@ -42,6 +45,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await search_agent.kickoff_async(query, response_format=WebsitesList)
+        get_global_cost_tracker().track_usage(result, model)
         return extract_structured_output(result, WebsitesList)
     
 
@@ -62,6 +66,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await scraper_agent.kickoff_async(query, response_format=WebsitesList)
+        get_global_cost_tracker().track_usage(result, model)
         enhanced_websites = extract_structured_output(result, WebsitesList)
         
         combined_websites = WebsitesList(websites=websites.websites + enhanced_websites.websites)
@@ -91,6 +96,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await scraper_agent.kickoff_async(query, response_format=schema_class)
+        get_global_cost_tracker().track_usage(result, model)
         print(f"✅ {self.state.section} research complete")
         return extract_structured_output(result, schema_class)
     
@@ -110,6 +116,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await writer_agent.kickoff_async(query)
+        get_global_cost_tracker().track_usage(result, model)
         print(f"📝 {self.state.section} report written")
         return result
 

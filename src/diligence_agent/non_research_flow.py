@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 from typing import Any
 from crewai.flow.flow import Flow, listen, start
-from diligence_agent.utils import extract_structured_output, get_schema_for_section
-from diligence_agent.agents import search_agent, scraper_agent, writer_agent
+from diligence_agent.utils import extract_structured_output, get_schema_for_section, get_global_cost_tracker
+from diligence_agent.agents import search_agent, scraper_agent, writer_agent, model
 from diligence_agent.schemas import ReportStructure
 import asyncio
 from opik.integrations.crewai import track_crewai
@@ -40,6 +40,7 @@ class NonResearchFlow(Flow[NonResearchState]):
         )
     
         result = await writer_agent.kickoff_async(query, response_format=schema_class)
+        get_global_cost_tracker().track_usage(result, model)
         print(f"✅ {self.state.section} composed")
         return extract_structured_output(result, schema_class)
     
@@ -56,6 +57,7 @@ class NonResearchFlow(Flow[NonResearchState]):
         )
 
         result = await writer_agent.kickoff_async(query)
+        get_global_cost_tracker().track_usage(result, model)
         print(f"📝 {self.state.section} report written")
         return result
 

@@ -19,7 +19,9 @@ from diligence_agent.utils import (
     write_final_report_to_google_doc,
     get_company_data_sources,
     get_available_companies,
-    validate_company_name
+    validate_company_name,
+    get_global_cost_tracker,
+    reset_global_cost_tracker
 )
 import os
 
@@ -64,6 +66,10 @@ class DiligenceState(BaseModel):
     section_progress: Dict[str, str] = {}  # section_name -> status ("pending", "in_progress", "completed")
     progress_callback: Optional[Callable[[str, str], None]] = Field(default=None, exclude=True)  # callback for progress updates (excluded from serialization)
 
+    # cost tracking
+    total_tokens_used: int = 0
+    total_cost: float = 0.0
+
     # data sources organizer flow
     data_sources: DataSources = DataSources(
         google_docs=[],
@@ -90,7 +96,12 @@ class DiligenceState(BaseModel):
 
 @persist(verbose=True)
 class DiligenceFlow(Flow[DiligenceState]):
-    
+
+    def __post_init__(self):
+        """Initialize cost tracker after flow is fully initialized"""
+        if not hasattr(self, 'cost_tracker'):
+            self.cost_tracker = get_global_cost_tracker()
+
     def _update_section_progress(self, section_name: str, status: str):
         """Update section progress and call callback if available"""
         self.state.section_progress[section_name] = status
@@ -171,6 +182,8 @@ class DiligenceFlow(Flow[DiligenceState]):
                 f"Return clean, well-formatted markdown content."
             )
             result = await organizer_agent.kickoff_async(query)
+            # Use global cost tracker
+            get_global_cost_tracker().track_usage(result, self.state.model)
             return clean_markdown_output(result.raw if hasattr(result, 'raw') else str(result))
         
         # Process Google Docs
@@ -324,6 +337,8 @@ class DiligenceFlow(Flow[DiligenceState]):
         )
         
         result = await writer_agent.kickoff_async(query)
+        # Use global cost tracker
+        get_global_cost_tracker().track_usage(result, self.state.model)
         raw_final_report = result.raw if hasattr(result, 'raw') else str(result)
         final_report = clean_markdown_output(raw_final_report)
         
@@ -371,7 +386,11 @@ async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = N
         print("🗑️ Cache cleared")
     
     diligence_flow = DiligenceFlow()
-    
+
+    # Ensure cost tracker is initialized (especially important for resumed flows)
+    if not hasattr(diligence_flow, 'cost_tracker'):
+        diligence_flow.cost_tracker = get_global_cost_tracker()
+
     # Prepare inputs
     if flow_id:
         # Resuming existing flow
@@ -433,7 +452,25 @@ async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = N
         print(f"❌ Error showing cache stats: {e}")
         import traceback
         traceback.print_exc()
-    
+
+    # Show cost summary using global cost tracker
+    cost_summary = get_global_cost_tracker().get_summary()
+    if cost_summary['total_llm_calls'] > 0:
+        print(f"\n💰 Cost Summary:")
+        print(f"   Total LLM Calls: {cost_summary['total_llm_calls']}")
+        print(f"   Total Tokens: {cost_summary['total_tokens']:,}")
+        if cost_summary['prompt_tokens'] > 0:
+            print(f"     • Prompt Tokens: {cost_summary['prompt_tokens']:,}")
+        if cost_summary['completion_tokens'] > 0:
+            print(f"     • Completion Tokens: {cost_summary['completion_tokens']:,}")
+        if cost_summary['total_cost'] > 0:
+            print(f"   Total Cost: ${cost_summary['total_cost']:.4f}")
+        print(f"   Model: {cost_summary['model']}")
+
+    # Update state with final cost info
+    diligence_flow.state.total_tokens_used = cost_summary['total_tokens']
+    diligence_flow.state.total_cost = cost_summary['total_cost']
+
     return result
 
 

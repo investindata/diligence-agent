@@ -11,12 +11,140 @@ from pydantic import BaseModel
 
 
 # =============================================================================
+# Cost Tracking Utilities
+# =============================================================================
+
+class CostTracker:
+    """Track token usage, costs, and LLM calls across agent executions"""
+
+    def __init__(self):
+        self.total_tokens = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_cost = 0.0
+        self.total_llm_calls = 0
+        self.model = None
+
+    def track_usage(self, result, model: str = None):
+        """Track token usage and cost from CrewAI agent results"""
+        if model:
+            self.model = model
+
+        # Count every LLM call
+        self.total_llm_calls += 1
+
+        # Initialize variables
+        tokens = 0
+        prompt_tokens = 0
+        completion_tokens = 0
+        cost = 0.0
+
+        # Check for usage_metrics (it's a dictionary in CrewAI LiteAgentOutput)
+        if hasattr(result, 'usage_metrics') and result.usage_metrics:
+            usage_dict = result.usage_metrics
+
+            # Extract token information from dictionary
+            if 'total_tokens' in usage_dict and usage_dict['total_tokens']:
+                tokens = usage_dict['total_tokens']
+                self.total_tokens += tokens
+
+            # Track prompt and completion tokens separately if available
+            if 'prompt_tokens' in usage_dict and usage_dict['prompt_tokens']:
+                prompt_tokens = usage_dict['prompt_tokens']
+                self.prompt_tokens += prompt_tokens
+            if 'completion_tokens' in usage_dict and usage_dict['completion_tokens']:
+                completion_tokens = usage_dict['completion_tokens']
+                self.completion_tokens += completion_tokens
+
+            # Get actual cost if available from LiteLLM or OpenAI response
+            cost = 0.0
+            if 'completion_cost' in usage_dict and usage_dict['completion_cost']:
+                cost = float(usage_dict['completion_cost'])
+            elif 'total_cost' in usage_dict and usage_dict['total_cost']:
+                cost = float(usage_dict['total_cost'])
+            elif model and tokens:
+                # Calculate estimated cost based on known pricing
+                cost = self._estimate_cost(model, prompt_tokens, completion_tokens)
+
+            print("Usage Metrics:", result.usage_metrics)
+
+            if cost > 0:
+                self.total_cost += cost
+                print(f"💰 Call #{self.total_llm_calls} | Tokens: {tokens:,} | Cost: ${cost:.4f} | Total: {self.total_tokens:,} tokens, ${self.total_cost:.4f}")
+            else:
+                print(f"💰 Call #{self.total_llm_calls} | Tokens: {tokens:,} | Total: {self.total_tokens:,} tokens")
+        else:
+            print(f"💰 Call #{self.total_llm_calls} | No usage data available in result object")
+
+    def _estimate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
+        """Estimate cost based on model pricing (fallback when actual cost unavailable)"""
+        model_lower = model.lower()
+
+        # OpenAI pricing per 1K tokens (as of 2024/2025)
+        pricing = {
+            'gpt-4o': {'prompt': 0.0025, 'completion': 0.01},
+            'gpt-4o-mini': {'prompt': 0.00015, 'completion': 0.0006},
+            'gpt-4.1': {'prompt': 0.003, 'completion': 0.012},
+            'gpt-4.1-mini': {'prompt': 0.00015, 'completion': 0.0006},
+            'gpt-4': {'prompt': 0.003, 'completion': 0.006},
+            'gpt-3.5-turbo': {'prompt': 0.0005, 'completion': 0.0015}
+        }
+
+        # Find matching pricing
+        model_pricing = None
+        for model_name, prices in pricing.items():
+            if model_name in model_lower:
+                model_pricing = prices
+                break
+
+        if not model_pricing:
+            # Default fallback pricing
+            model_pricing = {'prompt': 0.0015, 'completion': 0.002}
+
+        prompt_cost = (prompt_tokens / 1000) * model_pricing['prompt']
+        completion_cost = (completion_tokens / 1000) * model_pricing['completion']
+
+        return prompt_cost + completion_cost
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get cost and usage summary"""
+        return {
+            "total_tokens": self.total_tokens,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_cost": self.total_cost,
+            "total_llm_calls": self.total_llm_calls,
+            "model": self.model
+        }
+
+    def reset(self):
+        """Reset tracking counters"""
+        self.total_tokens = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_cost = 0.0
+        self.total_llm_calls = 0
+
+
+# Global cost tracker instance
+_global_cost_tracker = CostTracker()
+
+def get_global_cost_tracker() -> CostTracker:
+    """Get the global cost tracker instance"""
+    return _global_cost_tracker
+
+def reset_global_cost_tracker():
+    """Reset the global cost tracker"""
+    _global_cost_tracker.reset()
+
+
+# =============================================================================
 # Async Execution Utilities
 # =============================================================================
 
 async def execute_subflows_and_map_results(
     subflow_class,
-    sections: List[str], 
+    sections: List[str],
     base_inputs: dict,
     report_structure,
     company_name: str = "",
