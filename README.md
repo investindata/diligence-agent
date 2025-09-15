@@ -1,5 +1,5 @@
 ---
-title: My Gradio App
+title: Diligence Agent
 emoji: 🚀
 colorFrom: gray
 colorTo: blue
