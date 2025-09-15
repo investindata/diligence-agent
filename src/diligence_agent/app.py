@@ -1,13 +1,8 @@
 import gradio as gr
 from pathlib import Path
-from typing import Dict, Optional, List, Tuple
-import os
+from typing import Dict, Optional, List
 import base64
-import threading
-import subprocess
-import sys
 import json
-import asyncio
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -16,10 +11,6 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 from diligence_agent.flow import kickoff
-from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
-from diligence_agent.schemas import CompanyDataSources
-from diligence_agent.utils import extract_structured_output
-from diligence_agent.agents import organizer_agent
 
 
 class DueDiligenceUI:

@@ -80,14 +80,11 @@ class CostTracker:
         """Estimate cost based on model pricing (fallback when actual cost unavailable)"""
         model_lower = model.lower()
 
-        # OpenAI pricing per 1K tokens (as of 2024/2025)
+        # OpenAI pricing per 1M tokens (as of 2024/2025)
         pricing = {
-            'gpt-4o': {'prompt': 0.0025, 'completion': 0.01},
-            'gpt-4o-mini': {'prompt': 0.00015, 'completion': 0.0006},
-            'gpt-4.1': {'prompt': 0.003, 'completion': 0.012},
-            'gpt-4.1-mini': {'prompt': 0.00015, 'completion': 0.0006},
-            'gpt-4': {'prompt': 0.003, 'completion': 0.006},
-            'gpt-3.5-turbo': {'prompt': 0.0005, 'completion': 0.0015}
+            'gpt-4o-mini': {'input': 0.15, 'output': 0.60},
+            'gpt-4.1-mini': {'input': 0.40, 'output': 1.60},
+            'gpt-4.1': {'input': 2.00, 'output': 8.00}
         }
 
         # Find matching pricing
@@ -98,11 +95,12 @@ class CostTracker:
                 break
 
         if not model_pricing:
-            # Default fallback pricing
-            model_pricing = {'prompt': 0.0015, 'completion': 0.002}
+            # Default to gpt-4o-mini pricing if model not found
+            model_pricing = pricing['gpt-4o-mini']
 
-        prompt_cost = (prompt_tokens / 1000) * model_pricing['prompt']
-        completion_cost = (completion_tokens / 1000) * model_pricing['completion']
+        # Calculate cost per 1M tokens
+        prompt_cost = (prompt_tokens / 1_000_000) * model_pricing['input']
+        completion_cost = (completion_tokens / 1_000_000) * model_pricing['output']
 
         return prompt_cost + completion_cost
 
