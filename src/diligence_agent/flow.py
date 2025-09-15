@@ -42,7 +42,7 @@ class DiligenceState(BaseModel):
     current_date: str = ""
     
     # execution parameters
-    batch_size: int = 2
+    batch_size: int = 3
     batch_delay: float = 0.0  # seconds
     num_search_terms: int = 1
     num_websites: int = 1
@@ -69,6 +69,9 @@ class DiligenceState(BaseModel):
     # cost tracking
     total_tokens_used: int = 0
     total_cost: float = 0.0
+
+    # Google Doc report URL
+    google_doc_report_url: str = ""
 
     # data sources organizer flow
     data_sources: DataSources = DataSources(
@@ -359,7 +362,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             
             if google_doc_url:
                 print(f"🔗 Google Doc available at: {google_doc_url}")
-        
+                self.state.google_doc_report_url = google_doc_url
+
         self.state.final_report = final_report
         
         # Mark section as completed

@@ -19,6 +19,7 @@ class DueDiligenceUI:
     def __init__(self):
         self.section_progress = {}  # Track section progress for UI updates
         self.cost_info = {}  # Track cost information from last run
+        self.google_doc_url = ""  # Track Google Doc URL from last run
         
     def get_available_companies(self) -> List[str]:
         """Get list of available companies from the master sources document"""
@@ -82,6 +83,14 @@ class DueDiligenceUI:
                 'total_llm_calls': cost_summary['total_llm_calls'],
                 'model': cost_summary['model']
             }
+
+            # Capture Google Doc URL if available
+            if hasattr(result, 'state') and hasattr(result.state, 'google_doc_report_url'):
+                self.google_doc_url = result.state.google_doc_report_url
+                if self.google_doc_url:
+                    print(f"📝 Google Doc URL captured: {self.google_doc_url}")
+            else:
+                self.google_doc_url = ""
 
             if progress_callback:
                 progress_callback("Flow analysis completed successfully!")
@@ -302,12 +311,13 @@ class DueDiligenceUI:
             return ""
 
         cost_lines = ["### 💰 Cost Summary"]
+        cost_lines.append(f"**Model:** {self.cost_info['model']}")
         cost_lines.append(f"**Total LLM Calls:** {self.cost_info['total_llm_calls']}\n")
         cost_lines.append(f"**Total Tokens:** {self.cost_info['total_tokens']:,}\n")
         if self.cost_info['total_cost'] > 0:
             cost_lines.append(f"**Total Cost:** ${self.cost_info['total_cost']:.4f}\n")
 
-        cost_lines.append(f"**Model:** {self.cost_info['model']}")
+        
 
         return "\n".join(cost_lines)
 
@@ -411,6 +421,14 @@ class DueDiligenceUI:
                         interactive=True,
                         visible=False  # Hidden by default
                     )
+
+                    # Google Doc button - only shown if Google Doc was created successfully
+                    google_doc_button = gr.Button(
+                        "📄 View Google Doc Report",
+                        visible=False,
+                        variant="secondary",
+                        link=None  # Will be set dynamically
+                    )
                 
                 with gr.Column(scale=3):
                     gr.Markdown("### Report")
@@ -463,12 +481,14 @@ class DueDiligenceUI:
                         gr.update(visible=False),  # view_reports_header
                         gr.update(choices=[], value=None, visible=False),  # report_type_dropdown
                         gr.update(value="", visible=False),  # cost_display
+                        gr.update(visible=False),  # google_doc_button
                         gr.update()   # report_display
                     )
                 
-                # Reset section progress for new analysis
+                # Reset section progress and Google Doc URL for new analysis
                 self.section_progress = {}
-                
+                self.google_doc_url = ""
+
                 def progress_callback(message):
                     return gr.update(value=message, visible=True)
                 
@@ -512,6 +532,7 @@ class DueDiligenceUI:
                             gr.update(visible=False),  # view_reports_header - keep hidden during analysis
                             gr.update(visible=False),  # report_type_dropdown - keep hidden during analysis
                             gr.update(value="", visible=False),  # cost_display - keep hidden during analysis
+                            gr.update(visible=False),  # google_doc_button - keep hidden during analysis
                             gr.update()   # report_display
                         )
                     
@@ -534,14 +555,18 @@ class DueDiligenceUI:
                 # Format cost information
                 cost_info_md = self.format_cost_info()
 
+                # Show Google Doc button if URL is available
+                google_doc_visible = bool(self.google_doc_url)
+
                 yield (
                     gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
                     gr.update(value="", visible=False),  # section_progress_display - hide after completion
-                    gr.update(value=f"Analysis completed in {time_display}! Select a report to view.", visible=True),  # progress_display
+                    gr.update(value=f"Analysis completed in {time_display}!", visible=True),  # progress_display
                     gr.update(choices=updated_companies),  # company_dropdown - refresh with new companies
                     gr.update(visible=True),  # view_reports_header - show after analysis is complete
                     gr.update(choices=report_types, value=None, visible=True),  # report_type_dropdown - show with available reports
                     gr.update(value=cost_info_md, visible=True if cost_info_md else False),  # cost_display - show cost info after analysis
+                    gr.update(visible=google_doc_visible),  # google_doc_button - show if Google Doc was created
                     gr.update()   # report_display
                 )
             
@@ -567,11 +592,27 @@ class DueDiligenceUI:
                     outputs=[report_display]
                 )
             
+            # Google Doc button click handler - opens URL in new tab
+            def open_google_doc():
+                """Open Google Doc in new tab using JavaScript"""
+                if self.google_doc_url:
+                    # Return JavaScript that opens the URL in a new tab
+                    import webbrowser
+                    webbrowser.open(self.google_doc_url)
+                    return f"Opening Google Doc: {self.google_doc_url}"
+                else:
+                    return "❌ Google Doc URL not available. Make sure Google API credentials are configured."
+
+            google_doc_button.click(
+                fn=open_google_doc,
+                outputs=[]
+            )
+
             # Run analysis button handler
             run_analysis_btn.click(
                 fn=run_analysis_handler,
                 inputs=[company_dropdown, search_terms_slider, websites_slider],
-                outputs=[run_analysis_btn, section_progress_display, progress_display, company_dropdown, view_reports_header, report_type_dropdown, cost_display, report_display]
+                outputs=[run_analysis_btn, section_progress_display, progress_display, company_dropdown, view_reports_header, report_type_dropdown, cost_display, google_doc_button, report_display]
             )
             
             # Load initial state (blank)
