@@ -67,7 +67,17 @@ class DueDiligenceUI:
             if progress_callback:
                 progress_callback("Running flow analysis...")
             
-            result = loop.run_until_complete(run_flow())
+            flow_result = loop.run_until_complete(run_flow())
+
+            # Extract flow and result from tuple
+            if isinstance(flow_result, tuple) and len(flow_result) == 2:
+                flow, result = flow_result  # type: ignore
+                print(f"🔍 DEBUG: Successfully unpacked tuple - flow: {type(flow)}, result: {type(result)}")
+            else:
+                # Fallback if return format changes
+                flow = flow_result  # type: ignore
+                result = flow_result  # type: ignore
+                print(f"🔍 DEBUG: Using fallback - flow_result: {type(flow_result)}")
 
             # Capture cost information from global cost tracker
             from diligence_agent.utils import get_global_cost_tracker
@@ -85,17 +95,31 @@ class DueDiligenceUI:
             }
 
             # Capture Google Doc URL if available
-            if hasattr(result, 'state') and hasattr(result.state, 'google_doc_report_url'):
-                self.google_doc_url = result.state.google_doc_report_url
-                if self.google_doc_url:
-                    print(f"📝 Google Doc URL captured: {self.google_doc_url}")
+            print(f"🔍 DEBUG: Checking flow object for Google Doc URL")
+            print(f"🔍 DEBUG: flow type: {type(flow)}")
+            print(f"🔍 DEBUG: flow has state: {hasattr(flow, 'state')}")
+
+            if hasattr(flow, 'state'):
+                print(f"🔍 DEBUG: flow.state type: {type(flow.state)}")
+                print(f"🔍 DEBUG: flow.state has google_doc_report_url: {hasattr(flow.state, 'google_doc_report_url')}")
+                if hasattr(flow.state, 'google_doc_report_url'):
+                    print(f"🔍 DEBUG: google_doc_report_url value: '{flow.state.google_doc_report_url}'")
+                    self.google_doc_url = flow.state.google_doc_report_url
+                    if self.google_doc_url:
+                        print(f"📝 Google Doc URL captured: {self.google_doc_url}")
+                    else:
+                        print(f"⚠️ Google Doc URL is empty")
+                else:
+                    print(f"⚠️ google_doc_report_url attribute not found in state")
+                    self.google_doc_url = ""
             else:
+                print(f"⚠️ flow object has no state attribute")
                 self.google_doc_url = ""
 
             if progress_callback:
                 progress_callback("Flow analysis completed successfully!")
 
-            return f"Analysis completed successfully! Flow ID: {getattr(result, 'id', 'unknown')}"
+            return f"Analysis completed successfully! Flow ID: {getattr(flow.state, 'id', 'unknown') if hasattr(flow, 'state') else 'unknown'}"
                 
         except Exception as e:
             error_msg = f"Error running flow analysis: {str(e)}"
@@ -311,7 +335,7 @@ class DueDiligenceUI:
             return ""
 
         cost_lines = ["### 💰 Cost Summary"]
-        cost_lines.append(f"**Model:** {self.cost_info['model']}")
+        cost_lines.append(f"**Model:** {self.cost_info['model']}\n")
         cost_lines.append(f"**Total LLM Calls:** {self.cost_info['total_llm_calls']}\n")
         cost_lines.append(f"**Total Tokens:** {self.cost_info['total_tokens']:,}\n")
         if self.cost_info['total_cost'] > 0:

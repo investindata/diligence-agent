@@ -475,7 +475,8 @@ async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = N
     diligence_flow.state.total_tokens_used = cost_summary['total_tokens']
     diligence_flow.state.total_cost = cost_summary['total_cost']
 
-    return result
+    # Return a tuple with both flow instance (for state) and result
+    return (diligence_flow, result)
 
 
 def plot():
