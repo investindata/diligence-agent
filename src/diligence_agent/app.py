@@ -445,11 +445,9 @@ class DueDiligenceUI:
                     )
 
                     # Google Doc button - only shown if Google Doc was created successfully
-                    google_doc_button = gr.Button(
-                        "📄 View Google Doc Report",
-                        visible=False,
-                        variant="secondary",
-                        link=None  # Will be set dynamically
+                    google_doc_button = gr.HTML(
+                        value="",
+                        visible=False
                     )
                 
                 with gr.Column(scale=3):
@@ -581,12 +579,31 @@ class DueDiligenceUI:
                 # Format cost information
                 cost_info_md = self.format_cost_info(self.session_state)
 
-                # Update Google Doc button with URL and visibility
+                # Create Google Doc button HTML that opens in new tab
                 google_doc_url = self.session_state.get('google_doc_url', '')
                 if google_doc_url:
-                    google_doc_button_update = gr.update(visible=True, link=google_doc_url)
+                    google_doc_button_html = f'''
+                    <button onclick="window.open('{google_doc_url}', '_blank')"
+                            style="
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                                border-radius: 8px;
+                                cursor: pointer;
+                                font-size: 14px;
+                                font-weight: 500;
+                                transition: transform 0.2s ease;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                            "
+                            onmouseover="this.style.transform='scale(1.05)'"
+                            onmouseout="this.style.transform='scale(1)'">
+                        📄 View Google Doc Report
+                    </button>
+                    '''
+                    google_doc_button_update = gr.update(value=google_doc_button_html, visible=True)
                 else:
-                    google_doc_button_update = gr.update(visible=False)
+                    google_doc_button_update = gr.update(value="", visible=False)
 
                 yield (
                     gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
@@ -622,17 +639,6 @@ class DueDiligenceUI:
                     outputs=[report_display]
                 )
             
-            # Google Doc button - no click handler needed, we'll use direct link
-            def update_google_doc_button():
-                """Update Google Doc button with the URL as a link"""
-                google_doc_url = self.session_state.get('google_doc_url', '')
-                if google_doc_url:
-                    return gr.update(
-                        visible=True,
-                        link=google_doc_url  # This makes the button directly open the URL
-                    )
-                else:
-                    return gr.update(visible=False)
 
             # Run analysis button handler
             run_analysis_btn.click(
