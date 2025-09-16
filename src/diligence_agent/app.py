@@ -501,6 +501,7 @@ class DueDiligenceUI:
                     gr.update(visible=False),  # view_reports_header - keep hidden during analysis
                     gr.update(visible=False),  # report_type_dropdown - hide during analysis
                     gr.update(value="", visible=False),  # cost_display - hide during analysis
+                    gr.update(visible=False),  # google_doc_button - hide during analysis
                     gr.update()   # report_display
                 )
                 
@@ -627,14 +628,20 @@ class DueDiligenceUI:
 
 def launch_ui():
     """Launch the due diligence UI"""
+    import os
+
     ui = DueDiligenceUI()
     demo = ui.create_interface()
+
+    # Detect if running in Hugging Face Spaces
+    is_hf_spaces = os.getenv("SPACE_ID") is not None
+
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,  # Standard port for Hugging Face Spaces
         share=False,
         debug=False,  # Disable debug in production
-        inbrowser=False  # Don't try to open browser in server environment
+        inbrowser=not is_hf_spaces  # Open browser locally, but not in HF Spaces
     )
 
 
