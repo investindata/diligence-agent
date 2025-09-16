@@ -30,8 +30,8 @@ class CostTracker:
         if model:
             self.model = model
 
-        # Count every LLM call
-        self.total_llm_calls += 1
+        # Initialize LLM call count for this execution
+        llm_calls_this_execution = 1  # Default fallback
 
         # Initialize variables
         tokens = 0
@@ -42,6 +42,13 @@ class CostTracker:
         # Check for usage_metrics (it's a dictionary in CrewAI LiteAgentOutput)
         if hasattr(result, 'usage_metrics') and result.usage_metrics:
             usage_dict = result.usage_metrics
+
+            # Extract the actual number of LLM calls from successful_requests
+            if 'successful_requests' in usage_dict and usage_dict['successful_requests']:
+                llm_calls_this_execution = int(usage_dict['successful_requests'])
+                print(f"🔍 Found {llm_calls_this_execution} actual LLM calls (successful_requests) in this execution")
+            else:
+                print(f"⚠️ No 'successful_requests' field found, using default count of 1")
 
             # Extract token information from dictionary
             if 'total_tokens' in usage_dict and usage_dict['total_tokens']:
@@ -66,15 +73,18 @@ class CostTracker:
                 # Calculate estimated cost based on known pricing
                 cost = self._estimate_cost(model, prompt_tokens, completion_tokens)
 
-            print("Usage Metrics:", result.usage_metrics)
+            # Add the actual LLM calls to the total counter
+            self.total_llm_calls += llm_calls_this_execution
 
             if cost > 0:
                 self.total_cost += cost
-                print(f"💰 Call #{self.total_llm_calls} | Tokens: {tokens:,} | Cost: ${cost:.4f} | Total: {self.total_tokens:,} tokens, ${self.total_cost:.4f}")
+                print(f"💰 Execution with {llm_calls_this_execution} LLM calls | Tokens: {tokens:,} | Cost: ${cost:.4f} | Total: {self.total_llm_calls} calls, {self.total_tokens:,} tokens, ${self.total_cost:.4f}")
             else:
-                print(f"💰 Call #{self.total_llm_calls} | Tokens: {tokens:,} | Total: {self.total_tokens:,} tokens")
+                print(f"💰 Execution with {llm_calls_this_execution} LLM calls | Tokens: {tokens:,} | Total: {self.total_llm_calls} calls, {self.total_tokens:,} tokens")
         else:
-            print(f"💰 Call #{self.total_llm_calls} | No usage data available in result object")
+            # Fallback when no usage metrics available
+            self.total_llm_calls += llm_calls_this_execution
+            print(f"💰 Execution with {llm_calls_this_execution} LLM calls | No usage data available in result object | Total: {self.total_llm_calls} calls")
 
     def _estimate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
         """Estimate cost based on model pricing (fallback when actual cost unavailable)"""
