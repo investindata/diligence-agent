@@ -588,13 +588,18 @@ class DueDiligenceUI:
                                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                                 color: white;
                                 border: none;
-                                padding: 10px 20px;
-                                border-radius: 8px;
+                                padding: 8px 16px;
+                                border-radius: 6px;
                                 cursor: pointer;
                                 font-size: 14px;
                                 font-weight: 500;
                                 transition: transform 0.2s ease;
                                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                                width: 100%;
+                                height: 40px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
                             "
                             onmouseover="this.style.transform='scale(1.05)'"
                             onmouseout="this.style.transform='scale(1)'">
