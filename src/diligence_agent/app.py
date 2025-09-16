@@ -457,7 +457,7 @@ class DueDiligenceUI:
 
                     report_display = gr.Markdown(
                         value="",  # Start blank
-                        height=800,  # Increased from 600 to 800 (33% increase)
+                        height=850,  
                         show_copy_button=True,
                         container=True
                     )
@@ -581,8 +581,12 @@ class DueDiligenceUI:
                 # Format cost information
                 cost_info_md = self.format_cost_info(self.session_state)
 
-                # Show Google Doc button if URL is available
-                google_doc_visible = bool(self.session_state.get('google_doc_url', ''))
+                # Update Google Doc button with URL and visibility
+                google_doc_url = self.session_state.get('google_doc_url', '')
+                if google_doc_url:
+                    google_doc_button_update = gr.update(visible=True, link=google_doc_url)
+                else:
+                    google_doc_button_update = gr.update(visible=False)
 
                 yield (
                     gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
@@ -592,7 +596,7 @@ class DueDiligenceUI:
                     gr.update(visible=True),  # view_reports_header - show after analysis is complete
                     gr.update(choices=report_types, value=None, visible=True),  # report_type_dropdown - show with available reports
                     gr.update(value=cost_info_md, visible=True if cost_info_md else False),  # cost_display - show cost info after analysis
-                    gr.update(visible=google_doc_visible),  # google_doc_button - show if Google Doc was created
+                    google_doc_button_update,  # google_doc_button - show with link if Google Doc was created
                     gr.update()   # report_display
                 )
             
@@ -618,22 +622,17 @@ class DueDiligenceUI:
                     outputs=[report_display]
                 )
             
-            # Google Doc button click handler - opens URL in new tab
-            def open_google_doc():
-                """Open Google Doc in new tab using JavaScript"""
+            # Google Doc button - no click handler needed, we'll use direct link
+            def update_google_doc_button():
+                """Update Google Doc button with the URL as a link"""
                 google_doc_url = self.session_state.get('google_doc_url', '')
                 if google_doc_url:
-                    # Return JavaScript that opens the URL in a new tab
-                    import webbrowser
-                    webbrowser.open(google_doc_url)
-                    return f"Opening Google Doc: {google_doc_url}"
+                    return gr.update(
+                        visible=True,
+                        link=google_doc_url  # This makes the button directly open the URL
+                    )
                 else:
-                    return "❌ Google Doc URL not available. Make sure Google API credentials are configured."
-
-            google_doc_button.click(
-                fn=open_google_doc,
-                outputs=[]
-            )
+                    return gr.update(visible=False)
 
             # Run analysis button handler
             run_analysis_btn.click(
