@@ -749,7 +749,30 @@ def _convert_markdown_to_google_docs_format(markdown_content: str) -> List[Dict]
                 }
             })
             current_index += len(clean_text)
-            
+
+        elif line.startswith('#### '):
+            # H4 - Heading 3 style
+            clean_text = line[5:] + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': clean_text
+                }
+            })
+            requests.append({
+                'updateParagraphStyle': {
+                    'range': {
+                        'startIndex': current_index,
+                        'endIndex': current_index + len(clean_text) - 1
+                    },
+                    'paragraphStyle': {
+                        'namedStyleType': 'HEADING_3'
+                    },
+                    'fields': 'namedStyleType'
+                }
+            })
+            current_index += len(clean_text)
+
         elif line.startswith('- ') or line.startswith('* '):
             # Bullet points - handle bold text **text**
             processed_text = line[2:]
@@ -1041,15 +1064,15 @@ def write_final_report_to_google_doc(document_name: str, markdown_content: str, 
 def parse_all_companies_from_sources():
     """
     Parse all companies from the master diligence sources document using deterministic regex parsing.
-    
+
     Returns:
         Dictionary mapping company names to their DataSources
-        
+
     Raises:
         Exception: If the sources document URL is not configured or parsing fails
     """
     from diligence_agent.tools.google_doc_processor import GoogleDocProcessor
-    from diligence_agent.schemas import DataSources
+    from diligence_agent.schemas import DataSources  # Used in finalize_section
     
     # Get the sources document URL from environment
     sources_doc_url = os.getenv("DILIGENCE_SOURCES_DOC_URL")
@@ -1117,7 +1140,7 @@ def _parse_company_sources_content(content: str) -> Dict[str, Any]:
     }
     bullet_pattern = re.compile(r'^[•·\-\*]\s*(.+)$')
     # Also capture non-bullet content under sections (for items that don't have bullets)
-    content_pattern = re.compile(r'^(.+)$')
+    # content_pattern = re.compile(r'^(.+)$')  # Unused variable
     
     def finalize_section():
         """Add current section items to the current company"""
