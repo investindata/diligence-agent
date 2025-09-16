@@ -124,16 +124,27 @@ class CostTracker:
         self.total_llm_calls = 0
 
 
-# Global cost tracker instance
-_global_cost_tracker = CostTracker()
+# Session-based cost tracker instances
+_session_cost_trackers = {}
 
-def get_global_cost_tracker() -> CostTracker:
-    """Get the global cost tracker instance"""
-    return _global_cost_tracker
+def get_global_cost_tracker(session_id: str = "default") -> CostTracker:
+    """Get the cost tracker instance for a specific session"""
+    if session_id not in _session_cost_trackers:
+        _session_cost_trackers[session_id] = CostTracker()
+    return _session_cost_trackers[session_id]
 
-def reset_global_cost_tracker():
-    """Reset the global cost tracker"""
-    _global_cost_tracker.reset()
+def reset_global_cost_tracker(session_id: str = "default"):
+    """Reset the cost tracker for a specific session"""
+    if session_id in _session_cost_trackers:
+        _session_cost_trackers[session_id].reset()
+
+def cleanup_old_sessions(max_sessions: int = 100):
+    """Clean up old session cost trackers to prevent memory leaks"""
+    if len(_session_cost_trackers) > max_sessions:
+        # Keep only the most recent sessions (simple cleanup)
+        sessions_to_remove = list(_session_cost_trackers.keys())[:-max_sessions]
+        for session_id in sessions_to_remove:
+            del _session_cost_trackers[session_id]
 
 
 # =============================================================================
@@ -483,14 +494,14 @@ SECTION_ORDER = {
     "Final Report": 8,
 }
 
-def write_parsed_data_sources(parsed_sources: Dict[str, str], company_name: str, current_date: str = "", output_dir: str = "task_outputs") -> None:
+def write_parsed_data_sources(parsed_sources: Dict[str, str], company_name: str, current_date: str = "", output_dir: str = "task_outputs", session_id: Optional[str] = None) -> None:
     """Write parsed data sources to individual files."""
     for source_name, markdown_content in parsed_sources.items():
         # Clean source name for filename
         safe_filename = source_name.replace(":", "").replace("/", "_").replace(" ", "_")
-        write_section_file(f"Data_Source_{safe_filename}", markdown_content, company_name, current_date, output_dir, skip_numbering=True)
+        write_section_file(f"Data_Source_{safe_filename}", markdown_content, company_name, current_date, output_dir, skip_numbering=True, session_id=session_id)
 
-def write_section_file(section_name: str, content: str, company_name: str, current_date: str = "", output_dir: str = "task_outputs", skip_numbering: bool = False) -> str:
+def write_section_file(section_name: str, content: str, company_name: str, current_date: str = "", output_dir: str = "task_outputs", skip_numbering: bool = False, session_id: Optional[str] = None) -> str:
     """
     Write a section report to a numbered file with metadata header.
     
@@ -510,11 +521,20 @@ def write_section_file(section_name: str, content: str, company_name: str, curre
             return ""
         
         print(f"📝 Writing section: {section_name} (content length: {len(content)} chars)")
-        
-        # Create company-specific directory
-        company_dir = os.path.join(output_dir, company_name)
+
+        # Create session-aware directory structure to prevent user conflicts
+        if session_id:
+            # Use session-based directory: task_outputs/company_name_session_id/
+            safe_session_id = session_id[:8]  # Use first 8 chars of session ID
+            company_dir = os.path.join(output_dir, f"{company_name}_{safe_session_id}")
+        else:
+            # Fallback to timestamp-based directory for backward compatibility
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            company_dir = os.path.join(output_dir, f"{company_name}_{timestamp}")
+
         os.makedirs(company_dir, exist_ok=True)
-        print(f"📁 Using directory: {company_dir}")
+        print(f"📁 Using session-isolated directory: {company_dir}")
         
         # Format filename with or without numbering
         section_filename = section_name.replace(' ', '_').lower()
@@ -1055,7 +1075,7 @@ def parse_all_companies_from_sources():
         raise Exception(error_msg)
 
 
-def _parse_company_sources_content(content: str) -> Dict[str, "DataSources"]:
+def _parse_company_sources_content(content: str) -> Dict[str, Any]:
     """
     Parse the raw content of the sources document using regex patterns.
     

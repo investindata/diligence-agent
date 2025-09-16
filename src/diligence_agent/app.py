@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional, List
 import base64
 import json
+import uuid
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -14,12 +15,43 @@ from diligence_agent.flow import kickoff
 
 
 class DueDiligenceUI:
-    """Gradio UI for running analysis and viewing investment reports"""
-    
+    """Session-aware Gradio UI for running analysis and viewing investment reports"""
+
     def __init__(self):
-        self.section_progress = {}  # Track section progress for UI updates
-        self.cost_info = {}  # Track cost information from last run
-        self.google_doc_url = ""  # Track Google Doc URL from last run
+        # Session-based state management to isolate users
+        self._sessions = {}
+
+    def _get_session(self, session_id: str = None) -> Dict:
+        """Get or create session state for a user"""
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
+        if session_id not in self._sessions:
+            self._sessions[session_id] = {
+                'section_progress': {},  # Track section progress for UI updates
+                'cost_info': {},         # Track cost information from last run
+                'google_doc_url': "",    # Track Google Doc URL from last run
+                'session_id': session_id,
+                'created_at': datetime.now()
+            }
+
+        return self._sessions[session_id]
+
+    def _cleanup_old_sessions(self, max_age_hours: int = 24):
+        """Remove sessions older than max_age_hours"""
+        from diligence_agent.utils import cleanup_old_sessions
+        cleanup_old_sessions()  # Clean up cost trackers too
+
+        current_time = datetime.now()
+        sessions_to_remove = []
+
+        for session_id, session_data in self._sessions.items():
+            age = current_time - session_data['created_at']
+            if age.total_seconds() > (max_age_hours * 3600):
+                sessions_to_remove.append(session_id)
+
+        for session_id in sessions_to_remove:
+            del self._sessions[session_id]
         
     def get_available_companies(self) -> List[str]:
         """Get list of available companies from the master sources document"""
@@ -72,12 +104,10 @@ class DueDiligenceUI:
             # Extract flow and result from tuple
             if isinstance(flow_result, tuple) and len(flow_result) == 2:
                 flow, result = flow_result  # type: ignore
-                print(f"🔍 DEBUG: Successfully unpacked tuple - flow: {type(flow)}, result: {type(result)}")
             else:
                 # Fallback if return format changes
                 flow = flow_result  # type: ignore
                 result = flow_result  # type: ignore
-                print(f"🔍 DEBUG: Using fallback - flow_result: {type(flow_result)}")
 
             # Capture cost information from global cost tracker
             from diligence_agent.utils import get_global_cost_tracker
@@ -95,25 +125,11 @@ class DueDiligenceUI:
             }
 
             # Capture Google Doc URL if available
-            print(f"🔍 DEBUG: Checking flow object for Google Doc URL")
-            print(f"🔍 DEBUG: flow type: {type(flow)}")
-            print(f"🔍 DEBUG: flow has state: {hasattr(flow, 'state')}")
-
-            if hasattr(flow, 'state'):
-                print(f"🔍 DEBUG: flow.state type: {type(flow.state)}")
-                print(f"🔍 DEBUG: flow.state has google_doc_report_url: {hasattr(flow.state, 'google_doc_report_url')}")
-                if hasattr(flow.state, 'google_doc_report_url'):
-                    print(f"🔍 DEBUG: google_doc_report_url value: '{flow.state.google_doc_report_url}'")
-                    self.google_doc_url = flow.state.google_doc_report_url
-                    if self.google_doc_url:
-                        print(f"📝 Google Doc URL captured: {self.google_doc_url}")
-                    else:
-                        print(f"⚠️ Google Doc URL is empty")
-                else:
-                    print(f"⚠️ google_doc_report_url attribute not found in state")
-                    self.google_doc_url = ""
+            if hasattr(flow, 'state') and hasattr(flow.state, 'google_doc_report_url'):
+                self.google_doc_url = flow.state.google_doc_report_url
+                if self.google_doc_url:
+                    print(f"📝 Google Doc URL captured: {self.google_doc_url}")
             else:
-                print(f"⚠️ flow object has no state attribute")
                 self.google_doc_url = ""
 
             if progress_callback:
