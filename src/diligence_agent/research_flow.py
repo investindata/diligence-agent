@@ -16,6 +16,7 @@ class ResearchState(BaseModel):
     current_date: str = ""
     num_search_terms: int = 5
     num_websites: int = 10
+    session_id: str = "default"  # Session ID for cost tracking
 
 class ResearchFlow(Flow[ResearchState]):
 
@@ -45,7 +46,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await search_agent.kickoff_async(query, response_format=WebsitesList)
-        get_global_cost_tracker().track_usage(result, model)
+        get_global_cost_tracker(self.state.session_id).track_usage(result, model)
         return extract_structured_output(result, WebsitesList)
     
 
@@ -66,7 +67,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await scraper_agent.kickoff_async(query, response_format=WebsitesList)
-        get_global_cost_tracker().track_usage(result, model)
+        get_global_cost_tracker(self.state.session_id).track_usage(result, model)
         enhanced_websites = extract_structured_output(result, WebsitesList)
         
         combined_websites = WebsitesList(websites=websites.websites + enhanced_websites.websites)
@@ -96,7 +97,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await scraper_agent.kickoff_async(query, response_format=schema_class)
-        get_global_cost_tracker().track_usage(result, model)
+        get_global_cost_tracker(self.state.session_id).track_usage(result, model)
         print(f"✅ {self.state.section} research complete")
         return extract_structured_output(result, schema_class)
     
@@ -116,7 +117,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
         result = await writer_agent.kickoff_async(query)
-        get_global_cost_tracker().track_usage(result, model)
+        get_global_cost_tracker(self.state.session_id).track_usage(result, model)
         print(f"📝 {self.state.section} report written")
         return result
 

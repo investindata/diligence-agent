@@ -12,6 +12,7 @@ track_crewai(project_name="diligence-agent")
 class NonResearchState(BaseModel):
     section: str = ""
     company: str = ""
+    session_id: str = "default"  # Session ID for cost tracking
     report_structure: ReportStructure = ReportStructure(
         company_overview_section="",
         product_section="",
@@ -40,7 +41,7 @@ class NonResearchFlow(Flow[NonResearchState]):
         )
     
         result = await writer_agent.kickoff_async(query, response_format=schema_class)
-        get_global_cost_tracker().track_usage(result, model)
+        get_global_cost_tracker(self.state.session_id).track_usage(result, model)
         print(f"✅ {self.state.section} composed")
         return extract_structured_output(result, schema_class)
     
@@ -57,7 +58,7 @@ class NonResearchFlow(Flow[NonResearchState]):
         )
 
         result = await writer_agent.kickoff_async(query)
-        get_global_cost_tracker().track_usage(result, model)
+        get_global_cost_tracker(self.state.session_id).track_usage(result, model)
         print(f"📝 {self.state.section} report written")
         return result
 

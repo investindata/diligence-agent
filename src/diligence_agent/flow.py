@@ -252,6 +252,7 @@ class DiligenceFlow(Flow[DiligenceState]):
             "current_date": self.state.current_date,
             "num_search_terms": self.state.num_search_terms,
             "num_websites": self.state.num_websites,
+            "session_id": self.state.session_id,
         }
 
         # Mark sections as in progress
@@ -295,6 +296,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         base_inputs = {
             "company": self.state.company_name,
             "report_structure": self.state.report_structure,
+            "session_id": self.state.session_id,
         }
 
         # Mark sections as in progress
@@ -462,8 +464,8 @@ async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = N
         traceback.print_exc()
 
     # Show cost summary using session-specific cost tracker
-    session_id = diligence_flow.state.session_id if hasattr(diligence_flow.state, 'session_id') else ""
-    cost_summary = get_global_cost_tracker(session_id).get_summary()
+    session_id_val = diligence_flow.state.session_id if hasattr(diligence_flow.state, 'session_id') and diligence_flow.state.session_id else "default"
+    cost_summary = get_global_cost_tracker(session_id_val).get_summary()
     if cost_summary['total_llm_calls'] > 0:
         print(f"\n💰 Cost Summary:")
         print(f"   Total LLM Calls: {cost_summary['total_llm_calls']}")
