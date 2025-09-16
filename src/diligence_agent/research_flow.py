@@ -5,8 +5,13 @@ from diligence_agent.utils import extract_structured_output, get_schema_descript
 from diligence_agent.agents import search_agent, scraper_agent, writer_agent, model
 from diligence_agent.schemas import WebsitesList
 import asyncio
-from opik.integrations.crewai import track_crewai
-track_crewai(project_name="diligence-agent")
+# Conditionally enable Opik tracking (disable in production/HF Spaces)
+import os
+if not os.getenv("SPACE_ID"):  # SPACE_ID is set by Hugging Face Spaces
+    from opik.integrations.crewai import track_crewai
+    track_crewai(project_name="diligence-agent")
+else:
+    print("🚫 Opik tracking disabled (production environment)")
 
 
 class ResearchState(BaseModel):

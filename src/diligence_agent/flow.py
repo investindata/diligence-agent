@@ -31,8 +31,13 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 
-from opik.integrations.crewai import track_crewai
-track_crewai(project_name="diligence-agent")
+# Conditionally enable Opik tracking (disable in production/HF Spaces)
+if not os.getenv("SPACE_ID"):  # SPACE_ID is set by Hugging Face Spaces
+    from opik.integrations.crewai import track_crewai
+    track_crewai(project_name="diligence-agent")
+    print("🔍 Opik tracking enabled (local development)")
+else:
+    print("🚫 Opik tracking disabled (production environment)")
 
 
 
