@@ -40,7 +40,8 @@ class DiligenceState(BaseModel):
     # general info
     company_name: str = ""
     current_date: str = ""
-    
+    session_id: str = ""  # Session ID for file and cost isolation
+
     # execution parameters
     batch_size: int = 3
     batch_delay: float = 0.0  # seconds
@@ -185,8 +186,8 @@ class DiligenceFlow(Flow[DiligenceState]):
                 f"Return clean, well-formatted markdown content."
             )
             result = await organizer_agent.kickoff_async(query)
-            # Use global cost tracker
-            get_global_cost_tracker().track_usage(result, self.state.model)
+            # Use session-specific cost tracker
+            get_global_cost_tracker(self.state.session_id).track_usage(result, self.state.model)
             return clean_markdown_output(result.raw if hasattr(result, 'raw') else str(result))
         
         # Process Google Docs
@@ -222,7 +223,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         
         # Update state and write parsed data sources to files
         self.state.parsed_data_sources = parsed_sources
-        write_parsed_data_sources(parsed_sources, self.state.company_name, self.state.current_date)
+        write_parsed_data_sources(parsed_sources, self.state.company_name, self.state.current_date, session_id=self.state.session_id)
         
         # Mark section as completed
         self._update_section_progress("Parse Data Sources", "completed")
@@ -267,7 +268,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             self.state.current_date,
             self.state.batch_size,
             self.state.batch_delay,
-            progress_callback=self._update_section_progress
+            progress_callback=self._update_section_progress,
+            session_id=self.state.session_id
         )
         
         # Mark all executed sections as completed
@@ -309,7 +311,8 @@ class DiligenceFlow(Flow[DiligenceState]):
             self.state.current_date,
             self.state.batch_size,
             self.state.batch_delay,
-            progress_callback=self._update_section_progress
+            progress_callback=self._update_section_progress,
+            session_id=self.state.session_id
         )
         
         # Mark all executed sections as completed
@@ -340,14 +343,14 @@ class DiligenceFlow(Flow[DiligenceState]):
         )
         
         result = await writer_agent.kickoff_async(query)
-        # Use global cost tracker
-        get_global_cost_tracker().track_usage(result, self.state.model)
+        # Use session-specific cost tracker
+        get_global_cost_tracker(self.state.session_id).track_usage(result, self.state.model)
         raw_final_report = result.raw if hasattr(result, 'raw') else str(result)
         final_report = clean_markdown_output(raw_final_report)
         
         # Save final report using unified file writing function
         if final_report:
-            final_report_filepath = write_section_file("Final Report", final_report, self.state.company_name, self.state.current_date)
+            final_report_filepath = write_section_file("Final Report", final_report, self.state.company_name, self.state.current_date, session_id=self.state.session_id)
             if final_report_filepath:
                 print(f"✅ Final report completed")
             
@@ -372,7 +375,7 @@ class DiligenceFlow(Flow[DiligenceState]):
         return self.state.final_report
 
 
-async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback: Optional[Callable[[str, str], None]] = None) -> Any:
+async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = None, sections: Optional[List[str]] = None, clear_cache: bool = False, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback: Optional[Callable[[str, str], None]] = None, session_id: Optional[str] = None) -> Any:
     """
     Run the diligence flow with optional flow ID and specific sections.
     
@@ -432,6 +435,7 @@ async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = N
             "num_websites": num_websites,
             "model": model,
             "progress_callback": progress_callback,
+            "session_id": session_id or "",  # Add session_id to inputs
         }
         print(f"📄 Starting new flow for company: {company_name}")
         
@@ -457,8 +461,9 @@ async def kickoff(company_name: Optional[str] = None, flow_id: Optional[str] = N
         import traceback
         traceback.print_exc()
 
-    # Show cost summary using global cost tracker
-    cost_summary = get_global_cost_tracker().get_summary()
+    # Show cost summary using session-specific cost tracker
+    session_id = diligence_flow.state.session_id if hasattr(diligence_flow.state, 'session_id') else ""
+    cost_summary = get_global_cost_tracker(session_id).get_summary()
     if cost_summary['total_llm_calls'] > 0:
         print(f"\n💰 Cost Summary:")
         print(f"   Total LLM Calls: {cost_summary['total_llm_calls']}")

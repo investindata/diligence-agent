@@ -18,40 +18,20 @@ class DueDiligenceUI:
     """Session-aware Gradio UI for running analysis and viewing investment reports"""
 
     def __init__(self):
-        # Session-based state management to isolate users
-        self._sessions = {}
+        # For now, maintain a single session per UI instance to fix the multiple directories issue
+        # This provides session isolation while maintaining single-user behavior per browser session
+        self.session_state = self._create_initial_session_state()
 
-    def _get_session(self, session_id: str = None) -> Dict:
-        """Get or create session state for a user"""
-        if session_id is None:
-            session_id = str(uuid.uuid4())
-
-        if session_id not in self._sessions:
-            self._sessions[session_id] = {
-                'section_progress': {},  # Track section progress for UI updates
-                'cost_info': {},         # Track cost information from last run
-                'google_doc_url': "",    # Track Google Doc URL from last run
-                'session_id': session_id,
-                'created_at': datetime.now()
-            }
-
-        return self._sessions[session_id]
-
-    def _cleanup_old_sessions(self, max_age_hours: int = 24):
-        """Remove sessions older than max_age_hours"""
-        from diligence_agent.utils import cleanup_old_sessions
-        cleanup_old_sessions()  # Clean up cost trackers too
-
-        current_time = datetime.now()
-        sessions_to_remove = []
-
-        for session_id, session_data in self._sessions.items():
-            age = current_time - session_data['created_at']
-            if age.total_seconds() > (max_age_hours * 3600):
-                sessions_to_remove.append(session_id)
-
-        for session_id in sessions_to_remove:
-            del self._sessions[session_id]
+    def _create_initial_session_state(self) -> Dict:
+        """Create initial session state for a new user session"""
+        session_id = str(uuid.uuid4())
+        return {
+            'session_id': session_id,
+            'section_progress': {},  # Track section progress for UI updates
+            'cost_info': {},         # Track cost information from last run
+            'google_doc_url': "",    # Track Google Doc URL from last run
+            'created_at': datetime.now()
+        }
         
     def get_available_companies(self) -> List[str]:
         """Get list of available companies from the master sources document"""
@@ -62,22 +42,21 @@ class DueDiligenceUI:
             print(f"Error getting companies: {e}")
             return []
     
-    def run_analysis(self, company_name: str, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback=None) -> str:
+    def run_analysis(self, company_name: str, session_state: Dict, num_search_terms: int = 5, num_websites: int = 10, model: str = "gpt-4.1-mini", progress_callback=None) -> tuple[str, Dict]:
         """Run the diligence analysis using the flow system with company name"""
         if not company_name:
-            return "No company name provided"
-        
+            return "No company name provided", session_state
+
         try:
             if progress_callback:
                 progress_callback("Starting flow-based analysis...")
-            
-            # Create section progress callback that updates UI
+
+            session_id = session_state['session_id']
+
+            # Create section progress callback that updates session state
             def section_progress_callback(section_name: str, status: str):
-                self.update_section_progress(section_name, status)
-                # This callback will be called for real-time updates during polling
-                if hasattr(self, '_current_section_update_callback'):
-                    self._current_section_update_callback()
-            
+                session_state['section_progress'][section_name] = status
+
             # Run the analysis using the flow system directly
             async def run_flow():
                 return await kickoff(
@@ -85,9 +64,10 @@ class DueDiligenceUI:
                     num_search_terms=num_search_terms,
                     num_websites=num_websites,
                     model=model,
-                    progress_callback=section_progress_callback
+                    progress_callback=section_progress_callback,
+                    session_id=session_id  # Pass session ID for cost tracking and file isolation
                 )
-            
+
             # Create a new event loop for the async call
             import asyncio
             try:
@@ -95,10 +75,10 @@ class DueDiligenceUI:
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
+
             if progress_callback:
                 progress_callback("Running flow analysis...")
-            
+
             flow_result = loop.run_until_complete(run_flow())
 
             # Extract flow and result from tuple
@@ -109,13 +89,13 @@ class DueDiligenceUI:
                 flow = flow_result  # type: ignore
                 result = flow_result  # type: ignore
 
-            # Capture cost information from global cost tracker
+            # Capture cost information from session-specific cost tracker
             from diligence_agent.utils import get_global_cost_tracker
-            cost_tracker = get_global_cost_tracker()
+            cost_tracker = get_global_cost_tracker(session_id)
             cost_summary = cost_tracker.get_summary()
 
-            # Store cost info for UI display
-            self.cost_info = {
+            # Store cost info in session state
+            session_state['cost_info'] = {
                 'total_tokens': cost_summary['total_tokens'],
                 'prompt_tokens': cost_summary['prompt_tokens'],
                 'completion_tokens': cost_summary['completion_tokens'],
@@ -126,22 +106,23 @@ class DueDiligenceUI:
 
             # Capture Google Doc URL if available
             if hasattr(flow, 'state') and hasattr(flow.state, 'google_doc_report_url'):
-                self.google_doc_url = flow.state.google_doc_report_url
-                if self.google_doc_url:
-                    print(f"📝 Google Doc URL captured: {self.google_doc_url}")
+                session_state['google_doc_url'] = flow.state.google_doc_report_url
+                if session_state['google_doc_url']:
+                    print(f"📝 Google Doc URL captured: {session_state['google_doc_url']}")
             else:
-                self.google_doc_url = ""
+                session_state['google_doc_url'] = ""
 
             if progress_callback:
                 progress_callback("Flow analysis completed successfully!")
 
-            return f"Analysis completed successfully! Flow ID: {getattr(flow.state, 'id', 'unknown') if hasattr(flow, 'state') else 'unknown'}"
-                
+            flow_id = getattr(flow.state, 'id', 'unknown') if hasattr(flow, 'state') else 'unknown'
+            return f"Analysis completed successfully! Flow ID: {flow_id}", session_state
+
         except Exception as e:
             error_msg = f"Error running flow analysis: {str(e)}"
             if progress_callback:
                 progress_callback(error_msg)
-            return error_msg
+            return error_msg, session_state
     
     
     
@@ -150,22 +131,27 @@ class DueDiligenceUI:
         """Get all available reports for a company from task_outputs directory"""
         if not company_name:
             return []
-            
-        # Look in task_outputs directory (new flow-based structure)
-        task_outputs_dir = Path("task_outputs") / company_name
+
+        # Look for session-based directories first (new format: company_name_session_id)
+        session_id = self.session_state['session_id'][:8]  # Use first 8 chars
+        task_outputs_dir = Path("task_outputs") / f"{company_name}_{session_id}"
+
+        # Fallback to old format if session-based directory doesn't exist
         if not task_outputs_dir.exists():
-            return []
-        
+            task_outputs_dir = Path("task_outputs") / company_name
+            if not task_outputs_dir.exists():
+                return []
+
         reports = []
-        
+
         # Find all files that match the numbered pattern
         for file_path in task_outputs_dir.glob("[0-9]*"):
             filename = file_path.name
-            
+
             # Extract report type from filename
             # Format: {number}.{description}.{ext}
             # e.g., "8.final_report.md" -> "Final Report"
-            
+
             # Extract number and description
             number_prefix = ""
             if "." in filename:
@@ -177,16 +163,16 @@ class DueDiligenceUI:
                     name_parts = filename.rsplit(".", 1)[0]  # Remove extension only
             else:
                 name_parts = filename
-            
+
             # Convert to readable format
             report_type = number_prefix + name_parts.replace("_", " ").title()
-            
+
             reports.append({
                 "type": report_type,
                 "path": str(file_path),
                 "filename": filename
             })
-        
+
         return reports
     
     def find_latest_report_by_filename(self, filename: str, session_dirs: List[Path]) -> Optional[Path]:
@@ -313,51 +299,47 @@ class DueDiligenceUI:
         
         return sorted(report_types, key=sort_key)
     
-    def update_section_progress(self, section_name: str, status: str):
-        """Update progress for a specific section"""
-        self.section_progress[section_name] = status
-    
-    def format_section_progress(self) -> str:
+    def format_section_progress(self, session_state: Dict) -> str:
         """Format section progress as markdown list"""
-        if not self.section_progress:
+        section_progress = session_state.get('section_progress', {})
+        if not section_progress:
             return ""
-        
+
         # Import here to avoid circular imports
         from diligence_agent.flow import DiligenceState
-        
+
         # Get the actual sections from DiligenceState
         default_state = DiligenceState()
         sections_in_order = default_state.sections_to_run
-        
+
         # Map status to emoji
         status_emoji = {
             "pending": "⏳",
             "in_progress": "🔄",
             "completed": "✅"
         }
-        
+
         lines = []
         for section in sections_in_order:
-            if section in self.section_progress:
-                status = self.section_progress[section]
+            if section in section_progress:
+                status = section_progress[section]
                 emoji = status_emoji.get(status, "❓")
                 lines.append(f"{emoji} {section}\n")
 
         return "\n".join(lines) if lines else ""
 
-    def format_cost_info(self) -> str:
+    def format_cost_info(self, session_state: Dict) -> str:
         """Format cost information as markdown"""
-        if not self.cost_info or self.cost_info.get('total_llm_calls', 0) == 0:
+        cost_info = session_state.get('cost_info', {})
+        if not cost_info or cost_info.get('total_llm_calls', 0) == 0:
             return ""
 
         cost_lines = ["### 💰 Cost Summary"]
-        cost_lines.append(f"**Model:** {self.cost_info['model']}\n")
-        cost_lines.append(f"**Total LLM Calls:** {self.cost_info['total_llm_calls']}\n")
-        cost_lines.append(f"**Total Tokens:** {self.cost_info['total_tokens']:,}\n")
-        if self.cost_info['total_cost'] > 0:
-            cost_lines.append(f"**Total Cost:** ${self.cost_info['total_cost']:.4f}\n")
-
-        
+        cost_lines.append(f"**Model:** {cost_info['model']}\n")
+        cost_lines.append(f"**Total LLM Calls:** {cost_info['total_llm_calls']}\n")
+        cost_lines.append(f"**Total Tokens:** {cost_info['total_tokens']:,}\n")
+        if cost_info['total_cost'] > 0:
+            cost_lines.append(f"**Total Cost:** ${cost_info['total_cost']:.4f}\n")
 
         return "\n".join(cost_lines)
 
@@ -526,12 +508,12 @@ class DueDiligenceUI:
                     )
                 
                 # Reset section progress and Google Doc URL for new analysis
-                self.section_progress = {}
-                self.google_doc_url = ""
+                self.session_state['section_progress'] = {}
+                self.session_state['google_doc_url'] = ""
 
                 def progress_callback(message):
                     return gr.update(value=message, visible=True)
-                
+
                 # Update UI to show progress
                 yield (
                     gr.update(interactive=False, value="Running..."),  # run_analysis_btn
@@ -544,27 +526,30 @@ class DueDiligenceUI:
                     gr.update(visible=False),  # google_doc_button - hide during analysis
                     gr.update()   # report_display
                 )
-                
+
                 # Run the analysis in a separate thread
                 def run_in_background():
-                    return self.run_analysis(company_name, search_terms, websites, progress_callback=progress_callback)
-                
+                    result, updated_session_state = self.run_analysis(company_name, self.session_state, search_terms, websites, progress_callback=progress_callback)
+                    # Update the persistent session state
+                    self.session_state.update(updated_session_state)
+                    return result
+
                 import concurrent.futures
                 import time
                 start_time = time.time()
-                
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(run_in_background)
-                    
+
                     # Poll for completion and update section progress
                     while not future.done():
                         time.sleep(1)
                         elapsed = int(time.time() - start_time)
                         mins, secs = divmod(elapsed, 60)
-                        
+
                         # Get current section progress
-                        section_progress_md = self.format_section_progress()
-                        
+                        section_progress_md = self.format_section_progress(self.session_state)
+
                         yield (
                             gr.update(),  # run_analysis_btn
                             gr.update(value=section_progress_md, visible=True if section_progress_md else False),  # section_progress_display
@@ -576,28 +561,28 @@ class DueDiligenceUI:
                             gr.update(visible=False),  # google_doc_button - keep hidden during analysis
                             gr.update()   # report_display
                         )
-                    
+
                     result = future.result()
-                
+
                 # Calculate total execution time
                 total_time = time.time() - start_time
                 mins, secs = divmod(int(total_time), 60)
                 time_display = f"{mins:02d}:{secs:02d}"
-                
+
                 # Refresh company list and re-enable button
                 updated_companies = self.get_available_companies()
-                
+
                 # Get final section progress
-                final_section_progress = self.format_section_progress()
-                
+                final_section_progress = self.format_section_progress(self.session_state)
+
                 # After analysis is complete, show the "View Reports" section and populate reports for this company
                 report_types = self.get_report_types_for_company(company_name)
 
                 # Format cost information
-                cost_info_md = self.format_cost_info()
+                cost_info_md = self.format_cost_info(self.session_state)
 
                 # Show Google Doc button if URL is available
-                google_doc_visible = bool(self.google_doc_url)
+                google_doc_visible = bool(self.session_state.get('google_doc_url', ''))
 
                 yield (
                     gr.update(interactive=True, value="Run Analysis"),  # run_analysis_btn
@@ -636,11 +621,12 @@ class DueDiligenceUI:
             # Google Doc button click handler - opens URL in new tab
             def open_google_doc():
                 """Open Google Doc in new tab using JavaScript"""
-                if self.google_doc_url:
+                google_doc_url = self.session_state.get('google_doc_url', '')
+                if google_doc_url:
                     # Return JavaScript that opens the URL in a new tab
                     import webbrowser
-                    webbrowser.open(self.google_doc_url)
-                    return f"Opening Google Doc: {self.google_doc_url}"
+                    webbrowser.open(google_doc_url)
+                    return f"Opening Google Doc: {google_doc_url}"
                 else:
                     return "❌ Google Doc URL not available. Make sure Google API credentials are configured."
 

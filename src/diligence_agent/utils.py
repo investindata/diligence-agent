@@ -160,7 +160,8 @@ async def execute_subflows_and_map_results(
     current_date: str = "",
     batch_size: int = 2,
     batch_delay: float = 0.0,
-    progress_callback: Optional[Callable[[str, str], None]] = None
+    progress_callback: Optional[Callable[[str, str], None]] = None,
+    session_id: Optional[str] = None
 ) -> Any:
     """
     Execute multiple subflows in batches and map results to report structure fields.
@@ -217,7 +218,7 @@ async def execute_subflows_and_map_results(
             
             # Save individual section report to file using unified function
             if markdown_content:
-                section_filepath = write_section_file(section_name, markdown_content, company_name, current_date)
+                section_filepath = write_section_file(section_name, markdown_content, company_name, current_date, session_id=session_id)
                 if section_filepath:
                     print(f"✅ {section_name} completed")
                 else:
