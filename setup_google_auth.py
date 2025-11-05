@@ -19,10 +19,12 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Scopes needed for Google Drive access
+# Scopes needed for Google Drive access (read + write)
 SCOPES = [
-    'https://www.googleapis.com/auth/drive.readonly',  # Read-only access to Google Drive
-    'https://www.googleapis.com/auth/documents.readonly'  # Read-only access to Google Docs
+    'https://www.googleapis.com/auth/drive.readonly',     # Read access to Google Drive
+    'https://www.googleapis.com/auth/documents.readonly', # Read access to Google Docs  
+    'https://www.googleapis.com/auth/documents',          # Write access to Google Docs
+    'https://www.googleapis.com/auth/drive.file'          # Create files in Drive
 ]
 
 def load_env_variables():
@@ -124,6 +126,37 @@ def main():
         
         print(f"✅ Successfully authenticated as: {user_email}")
         
+        # Test write permissions
+        print("🧪 Testing Google Docs write permissions...")
+        try:
+            docs_service = build('docs', 'v1', credentials=creds)
+            
+            # Create a test document
+            test_doc = {'title': 'DiligenceAgent_Test_Document'}
+            doc = docs_service.documents().create(body=test_doc).execute()
+            document_id = doc.get('documentId')
+            
+            # Add content to test write access
+            requests = [{
+                'insertText': {
+                    'location': {'index': 1},
+                    'text': 'This is a test document created by DiligenceAgent. You can delete this.'
+                }
+            }]
+            
+            docs_service.documents().batchUpdate(
+                documentId=document_id,
+                body={'requests': requests}
+            ).execute()
+            
+            document_url = f"https://docs.google.com/document/d/{document_id}/edit"
+            print(f"✅ Write permissions confirmed! Test document: {document_url}")
+            print("   (You can delete this test document from your Google Drive)")
+            
+        except Exception as e:
+            print(f"❌ Write permissions test failed: {e}")
+            print("   You may have read-only permissions. Check your OAuth2 consent screen.")
+        
         # Save refresh token to .env file
         refresh_token = creds.refresh_token
         if refresh_token:
@@ -134,8 +167,13 @@ def main():
             return
         
         print("\n🎉 Setup complete!")
-        print("Your application can now access Google Drive documents privately.")
-        print("You won't need to authenticate again unless you revoke access.")
+        print("Your application can now:")
+        print("  • Read Google Drive documents")
+        print("  • Create new Google Docs")
+        print("  • Write content to Google Docs")
+        print("  • Place documents in Drive folders")
+        print("\nYou won't need to authenticate again unless you revoke access.")
+        print("You can now test the Final Report Google Doc creation!")
         
     except Exception as e:
         print(f"❌ Error during authentication: {e}")

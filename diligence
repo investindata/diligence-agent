@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Diligence Agent CLI wrapper
-# Makes it easier to run the diligence agent with various options
+# Flow-based investment analysis tool
 
 # Colors for output
 RED='\033[0;31m'
@@ -23,61 +23,136 @@ show_help() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo "Usage:"
-    echo "  ./diligence                    # Interactive mode - pick from menu"
-    echo "  ./diligence list               # List available companies"
-    echo "  ./diligence <company>          # Analyze specific company"
-    echo "  ./diligence <company1> <company2> # Analyze multiple companies"
-    echo "  ./diligence all                # Analyze all companies"
+    echo "  ./diligence --sources=\"<google_doc_url>\"                    # Start new analysis"
+    echo "  ./diligence --flow_id=\"<id>\" --sections=\"<sections>\"       # Resume existing flow"
+    echo "  ./diligence --sources=\"<url>\" --sections=\"<sections>\"       # New analysis with specific sections"
+    echo ""
+    echo "Required for new analysis:"
+    echo "  --sources=\"<url>\"          # Google Doc URL containing company data sources"
+    echo ""
+    echo "Optional parameters:"
+    echo "  --flow_id=\"<id>\"           # Resume existing flow with this ID"
+    echo "  --sections=\"<sections>\"     # Comma-separated list of sections to run"
+    echo "                             # Available: Company Overview,Product,Market,Founders,Final Report"
+    echo "  --search_terms=<n>       # Number of search terms to generate for research (default: 5)"
+    echo "  --websites=<n>           # Number of websites to scrape per search (default: 10)"
+    echo "  --model=<model>          # LLM model to use: gpt-4o-mini, gpt-4.1-mini, gpt-4.1 (default: gpt-4.1-mini)"
+    echo "  --clear_cache            # Clear search/scraping cache before running"
     echo ""
     echo "Examples:"
-    echo "  ./diligence                    # Opens interactive menu"
-    echo "  ./diligence list               # Shows: tensorstax, baseten"
-    echo "  ./diligence tensorstax         # Analyzes Tensorstax only"
-    echo "  ./diligence tensorstax baseten # Analyzes both companies"
-    echo "  ./diligence all                # Analyzes all available companies"
+    echo "  ./diligence --sources=\"https://docs.google.com/document/d/abc123/edit\""
+    echo "  ./diligence --flow_id=\"abc-123\" --sections=\"Final Report,Market\""
+    echo "  ./diligence --sources=\"https://docs.google.com/.../edit\" --sections=\"Final Report\""
+    echo "  ./diligence --sources=\"https://docs.google.com/.../edit\" --clear_cache"
     echo ""
     echo "Options:"
-    echo "  -h, --help                     # Show this help message"
-    echo "  -l, --list                     # List available companies"
-    echo "  -i, --interactive              # Force interactive mode"
+    echo "  -h, --help               # Show this help message"
     echo ""
 }
 
-# Handle help flag
-if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]] || [[ "$1" == "help" ]]; then
+# Parse arguments
+SOURCES=""
+FLOW_ID=""
+SECTIONS=""
+SEARCH_TERMS=""
+WEBSITES=""
+MODEL=""
+CLEAR_CACHE=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --sources=*)
+            SOURCES="${1#*=}"
+            shift
+            ;;
+        --flow_id=*)
+            FLOW_ID="${1#*=}"
+            shift
+            ;;
+        --sections=*)
+            SECTIONS="${1#*=}"
+            shift
+            ;;
+        --search_terms=*)
+            SEARCH_TERMS="${1#*=}"
+            shift
+            ;;
+        --websites=*)
+            WEBSITES="${1#*=}"
+            shift
+            ;;
+        --model=*)
+            MODEL="${1#*=}"
+            shift
+            ;;
+        --clear_cache)
+            CLEAR_CACHE="true"
+            shift
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown parameter '$1'${NC}"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Validate required parameters
+if [[ -z "$SOURCES" && -z "$FLOW_ID" ]]; then
+    echo -e "${RED}Error: Either --sources or --flow_id is required${NC}"
+    echo ""
     show_help
-    exit 0
-fi
-
-# Handle list command
-if [[ "$1" == "list" ]] || [[ "$1" == "-l" ]] || [[ "$1" == "--list" ]]; then
-    echo -e "${BLUE}Available companies:${NC}"
-    uv run -q python -m diligence_agent --list 2>/dev/null
-    exit 0
-fi
-
-# Handle 'all' command
-if [[ "$1" == "all" ]]; then
-    echo -e "${GREEN}Analyzing all companies...${NC}"
-    uv run -q python -m diligence_agent --all 2>/dev/null
-    exit 0
+    exit 1
 fi
 
 # Set environment to suppress warnings
 export PYTHONWARNINGS="ignore"
 export PYTHONDONTWRITEBYTECODE=1
 
-# Run with arguments or interactive
-if [ $# -eq 0 ]; then
-    # No arguments - run interactive mode
-    echo -e "${BLUE}Starting interactive mode...${NC}"
-    echo ""
-    # Use the package directly (will use __main__.py) and filter warnings
-    uv run python -m diligence_agent 2>&1 | grep -v "/site-packages/"
-else
-    # Pass all arguments to the Python script
-    echo -e "${GREEN}Analyzing: $@${NC}"
-    echo ""
-    # For command-line args, use the package directly and filter warnings
-    uv run python -m diligence_agent "$@" 2>&1 | grep -v "/site-packages/"
+# Build Python command
+PYTHON_ARGS=()
+
+if [[ -n "$SOURCES" ]]; then
+    PYTHON_ARGS+=("--sources" "$SOURCES")
+    echo -e "${GREEN}Starting new analysis with data sources...${NC}"
 fi
+
+if [[ -n "$FLOW_ID" ]]; then
+    PYTHON_ARGS+=("--flow_id" "$FLOW_ID")
+    echo -e "${GREEN}Resuming flow: $FLOW_ID${NC}"
+fi
+
+if [[ -n "$SECTIONS" ]]; then
+    PYTHON_ARGS+=("--sections" "$SECTIONS")
+    echo -e "${BLUE}Running sections: $SECTIONS${NC}"
+fi
+
+if [[ -n "$SEARCH_TERMS" ]]; then
+    PYTHON_ARGS+=("--search_terms" "$SEARCH_TERMS")
+    echo -e "${BLUE}Using $SEARCH_TERMS search terms${NC}"
+fi
+
+if [[ -n "$WEBSITES" ]]; then
+    PYTHON_ARGS+=("--websites" "$WEBSITES")
+    echo -e "${BLUE}Scraping $WEBSITES websites per search${NC}"
+fi
+
+if [[ -n "$MODEL" ]]; then
+    PYTHON_ARGS+=("--model" "$MODEL")
+    echo -e "${BLUE}Using model: $MODEL${NC}"
+fi
+
+if [[ -n "$CLEAR_CACHE" ]]; then
+    PYTHON_ARGS+=("--clear_cache")
+    echo -e "${YELLOW}Cache will be cleared before running${NC}"
+fi
+
+echo ""
+
+# Run the flow
+uv run python src/diligence_agent/flow.py "${PYTHON_ARGS[@]}" 2>&1 | grep -v "/site-packages/"
