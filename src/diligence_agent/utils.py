@@ -1112,31 +1112,35 @@ def parse_all_companies_from_sources():
 def _parse_company_sources_content(content: str) -> Dict[str, Any]:
     """
     Parse the raw content of the sources document using regex patterns.
-    
+
     Args:
         content: Raw text content from the Google Doc
-        
+
     Returns:
         Dictionary mapping company names to DataSources objects
     """
     from diligence_agent.schemas import DataSources
-    
+
     companies = {}
-    
+
+    # Remove BOM character if present (common in public exports)
+    content = content.lstrip('\ufeff')
+
     # Split content into lines and clean them
     lines = [line.strip() for line in content.split('\n')]
-    
+
     current_company = None
     current_section = None
     current_items = []
-    
+
     # Regex patterns
     company_pattern = re.compile(r'^Company(?:\s+name)?:\s*(.+?)$', re.IGNORECASE)
+    # Updated section patterns to handle optional bullets at the start (for public export format)
     section_patterns = {
-        'google_docs': re.compile(r'^Google\s+docs?:?\s*$', re.IGNORECASE),
-        'websites': re.compile(r'^Websites?:?\s*$', re.IGNORECASE),
-        'pdfs': re.compile(r'^PDFs?:?\s*$', re.IGNORECASE),
-        'slack_channels': re.compile(r'^Slack\s+(?:channels?|channel):?\s*$', re.IGNORECASE)
+        'google_docs': re.compile(r'^(?:[•·\-\*]\s*)?Google\s+docs?:?\s*$', re.IGNORECASE),
+        'websites': re.compile(r'^(?:[•·\-\*]\s*)?Websites?:?\s*$', re.IGNORECASE),
+        'pdfs': re.compile(r'^(?:[•·\-\*]\s*)?PDFs?:?\s*$', re.IGNORECASE),
+        'slack_channels': re.compile(r'^(?:[•·\-\*]\s*)?Slack\s+(?:channels?|channel):?\s*$', re.IGNORECASE)
     }
     bullet_pattern = re.compile(r'^[•·\-\*]\s*(.+)$')
     # Also capture non-bullet content under sections (for items that don't have bullets)
